@@ -412,7 +412,7 @@ angular.module('BE.seed.service.label',
         update_label : update_label,
         delete_label : delete_label,
         update_building_labels : update_building_labels,
-        apply_cleansing_labels: apply_cleansing_labels,
+        apply_cleansing_building_labels: apply_cleansing_building_labels,
         get_available_colors : get_available_colors,
         create_temp_label : create_temp_label,
     

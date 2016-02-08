@@ -82,7 +82,6 @@ angular.module('BE.seed.controller.cleansing_apply_labels_modal_ctrl', [])
         //reset state vars
         $scope.status = $scope.STATUS_READY;
         $scope.apply_labels_error = null;
-        $scope.num_labels_applied = 0;
 
         //gather data for service call
         var selected_labels = _.filter(errorLabels, function(label){
@@ -90,13 +89,15 @@ angular.module('BE.seed.controller.cleansing_apply_labels_modal_ctrl', [])
         });
         var bulk_apply_labels_data = build_bulk_apply_labels_data(selected_labels, $scope.cleansingResults);
 
+        //remember how many labels we're updating
+        $scope.num_labels_applied = selected_labels.length;
+
         //TODO: show progress
 
         //do service call
-        label_service.apply_cleansing_labels(bulk_apply_labels_data).then(
+        label_service.apply_cleansing_building_labels(bulk_apply_labels_data).then(
             function(data){
                 //labels were applied successfully
-                $scope.num_labels_applied = selected_labels.length;
                 $scope.status = $scope.STATUS_COMPLETE;                
             },
             function(data, status) {
