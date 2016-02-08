@@ -11,10 +11,10 @@
     </div>
     <div class="modal-body">
 
-        <div ng-show="!apply_labels_complete"
+        <div ng-show="status!==STATUS_COMPLETE"
             class="row" >
 
-            <div ng-show="apply_labels_error" 
+            <div ng-show="status===STATUS_ERROR" 
                 class="alert alert-danger " >
                 <strong>Error</strong> {$ apply_labels_error $} </strong>.
             </div>          
@@ -60,20 +60,20 @@
     </div>
     <div class="modal-footer">
         <button type="button"
-                ng-show="apply_labels_complete"
+                ng-show="status===STATUS_COMPLETE"
                 class="btn btn-primary"
                 style="min-width:90px;"
                 ng-click="done()">
                 Ok</button>
         <button type="button"
-                ng-show="!apply_labels_complete"
+                ng-show="status!==STATUS_COMPLETE"
                 class="btn btn-primary"
                 style="min-width:90px;"
                 ng-disabled="!is_checked"
                 ng-click="apply_now()">
                 Apply Now</button>
         <button type="button"
-                ng-show="!apply_labels_complete"
+                ng-show="status!==STATUS_COMPLETE"
                 class="btn btn-default"
                 style="min-width:90px;"
                 ng-click="cancel()">

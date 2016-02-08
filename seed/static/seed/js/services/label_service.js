@@ -229,20 +229,20 @@ angular.module('BE.seed.service.label',
 
     /* 
 
-    This method applies and/or removes labels to sets of buildings. 
-    Each label is applied to a set of building ids and/or removed from a set of building ids. 
+    This method applies labels to sets of buildings as part of the data cleansing process. 
+    TODO: At some point this method should be made more generic, so that it's not coupled directly
+    to data cleansing (semantically or otherwise) and allows removing labels from buildings.
+    
 
-    @param {array} label_ids                An array of label_ids that will be used in this operation
-    @param {array} update_label_objs        An array of objects that define a label id and an 'apply'
-                                            and 'remove' set of buildings for that label.
+    @param {array} apply_label_objs     An array of objects, each of which defines a label id and an array
+                                        of buildings to apply that label to.
 
-    Each apply_label_obj in the update_label_objs array should have the following structure:
+    Each apply_label_obj in apply_label_objs should have the following structure:
 
         For existing labels...
         { 
             label_id :1,                                //The label's id
             add_to_building_ids : [1,2,3],              //An array of building ids to apply label to
-            remove_from_building_ids: [21,22,23]        //An array of building ids to remove label from
         }
 
         For new labels...
@@ -250,51 +250,59 @@ angular.module('BE.seed.service.label',
             label_id: null,                     //null means this is a new label
             label_name: "new label",
             label_color: "red",
-            label_label: "primary",           
             add_to_building_ids : [1,4]         //An array of building IDs to apply label to after creation 
         }
 
-    Note that building ids should be canonical snapshots.
+    Note that building ids should point to 'canonical' building snapshot rows.
 
     */
 
-    function bulk_update_building_labels(label_ids, update_objs) {
+    function apply_cleansing_labels(apply_label_objs) {
 
         //VALIDATE ARGUMENTS
         //A bit defensive coding : let's test to make sure 
-        //the arguments are properly formed and throw an error if not.
-        if (!angular.isDefined(label_ids) || !angular.isArray(label_ids) || label_ids.length===0){
-            throw "Invalid argument. label_ids must be an array with one or more elements.";
+        //the argument is properly formed and throw an error if not.
+        if (!angular.isDefined(apply_label_objs) || !angular.isArray(apply_label_objs) || apply_label_objs.length===0){
+            throw "Invalid argument. apply_label_objs must be an array with one or more elements.";
         }
-        if (!angular.isDefined(update_objs) || !angular.isArray(update_objs) || update_objs.length===0){
-            throw "Invalid argument. update_objs must be an array with one or more elements.";
-        }
-        _.each(update_objs, function(update_obj){
-            if (angular.isNumber(update_obj.label_id)===false && update_obj.label_id!==null){
+        _.each(apply_label_objs, function(apply_label_obj){
+            if (!angular.isNumber(apply_label_obj.label_id) && apply_label_obj.label_id!==null){
                 throw "Invalid property: label_id must be an integer or 'null'";
-            }            
+            }          
+            if (!angular.isDefined(apply_label_obj.add_to_building_ids) || 
+                !angular.isArray(apply_label_obj.add_to_building_ids) || 
+                apply_label_obj.add_to_building_ids.length===0){
+                throw "Invalid argument. add_to_building_ids must be an array with one or more elements.";
+            }  
             //if id is null, the new label properties should be defined
-            if (update_obj.label_id===null){
-                if (!angular.isDefined(update_obj.label_name)){
+            if (apply_label_obj.label_id===null){
+                if (!angular.isDefined(apply_label_obj.label_name)){
                     throw "Invalid property: label_name must be defined";
                 }   
-                if (!angular.isDefined(update_obj.label_color)){
+                if (!angular.isDefined(apply_label_obj.label_color)){
                     throw "Invalid property: label_color must be defined";
-                }  
-                if (!angular.isDefined(update_obj.label_label)){
-                    throw "Invalid property: label_label must be defined";
                 }  
             }
         });
+        
+        //BUILD EXTRA PROPERTIES FOR CALL
+        //Because of the way django-rest works, we have to build two 'extra' properties for the server.
+        //These properties indicate which labels and buildings are involved in the operation
+        var label_ids = _(apply_label_objs).chain().pluck('label_id').uniq().compact().value();  
+        var building_ids = _(apply_label_objs).chain().pluck('add_to_building_ids').union().uniq().value();
 
-        //MAKE SERVER CALL
+        //MAKE SERVER CALL        
         var defer = $q.defer();
         $http({
             method: 'PUT',            
-            'url': window.BE.urls.bulk_update_building_labels,
-            'data': {
-                'label_ids' : label_ids,
-                'updates'   : update_objs
+            'url': window.BE.urls.apply_cleansing_labels,
+            'params': {
+                'organization_id': user_service.get_organization().id
+            },
+            'data' : {
+                'label_ids'     : label_ids,
+                'building_ids'  : building_ids,
+                'updates'       : apply_label_objs
             }
         }).success(function(data, status, headers, config) {
             defer.resolve(data);
@@ -303,7 +311,6 @@ angular.module('BE.seed.service.label',
         });
         return defer.promise;
     }
-
 
 
 
@@ -408,6 +415,7 @@ angular.module('BE.seed.service.label',
         update_label : update_label,
         delete_label : delete_label,
         update_building_labels : update_building_labels,
+        apply_cleansing_labels: apply_cleansing_labels,
         get_available_colors : get_available_colors,
         create_temp_label : create_temp_label,
     

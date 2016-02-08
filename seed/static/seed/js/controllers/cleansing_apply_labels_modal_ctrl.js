@@ -26,28 +26,31 @@ angular.module('BE.seed.controller.cleansing_apply_labels_modal_ctrl', [])
         label.is_checked_add = false;
     });
 
-    // keep track of process of applying labels
-    $scope.apply_labels_complete = false;
+     /* View status */
+    $scope.STATUS_READY = "ready";
+    $scope.STATUS_COMPLETE = "complete";
+    $scope.status = $scope.STATUS_READY;
 
     // A string to describe server error to user, null if there is no error.
     $scope.apply_labels_error = null;
 
     // A list of labels for cleansing errors in this data set.
-    // Note that some labels might be 'temporary' as they haven't
-    // been created on the server yet. 
+    // Note that some labels might be 'temporary' with an id of null,
+    // since they haven't been created on the server yet. 
     $scope.errorLabels = errorLabels;
     
-    // cleansingResults array: this is an array of objects with a building "id" property 
-    // and a "cleansingResults" child array.
-    // This child "cleansingResults" array contains one or more objects describing the error row, 
-    // including an error "message" property.
-    // In this controller, we're only concerned with these "id" and "message" properties.
+    // cleansingResults array: this is an array of objects that include 
+    // a building "id" property and a "cleansingResults" child array.
+    // This child "cleansingResults" array contains one or more 
+    // objects describing the error row, including an error "message" property.
+    // In this controller, we're only concerned with the parent object "id" property 
+    // the child object "message" properties.
     $scope.cleansingResults = cleansingResults;
 
-    // Var for view
+    // Bind for view
     $scope.num_labels_applied = 0;
 
-    /* At least one apply button checked */
+    // At least one apply button checked 
     $scope.is_checked = false;
 
 
@@ -76,32 +79,33 @@ angular.module('BE.seed.controller.cleansing_apply_labels_modal_ctrl', [])
         apply all error labels they have selected */
     $scope.apply_now = function() {
 
-        $scope.apply_labels_complete = false;
+        //reset state vars
+        $scope.status = $scope.STATUS_READY;
         $scope.apply_labels_error = null;
 
         //Get data in right format for service
         var selected_labels = _.filter(errorLabels, function(label){
             return label.is_checked_add===true;
         });
-        var label_ids = _.pluck(selected_labels, 'id');
-        var bulk_updates = build_bulk_update_labels_data(selected_labels, $scope.cleansingResults);  
+        var bulk_apply_labels_data = build_bulk_apply_labels_data(selected_labels, $scope.cleansingResults);
 
         //save number of labels for complete message
-        $scope.num_labels_applied = label_ids.length;
+        $scope.num_labels_applied = selected_labels.length;
 
         //TODO: show progress
 
         //do call
-        label_service.bulk_update_building_labels(label_ids, bulk_updates).then(
+        label_service.apply_cleansing_labels(bulk_apply_labels_data).then(
             function(data){
                 //if labels were applied successfully, 
                 //switch mode of modal to show success message and 'done'
-                $scope.apply_labels_complete = true;                
+                $scope.status = $scope.STATUS_COMPLETE;                
             },
             function(data, status) {
                 // Rejected promise, error occurred.
                 // TODO: Make this nicer...just doing alert for development
                 alert('Error updating building labels: ' + status.toString());
+                $scope.status = $scope.STATUS_READY;  
                 $scope.apply_labels_error = "Error applying labels (" + status.toString() + ")";
             }       	
         );
@@ -113,37 +117,53 @@ angular.module('BE.seed.controller.cleansing_apply_labels_modal_ctrl', [])
     /* ~~~~~~~~~~~~~~~~~~~~~~~~~~ */   
 
 
-    /* Build an array of objects defining labels and the buildings they should be applied to */
-    function build_bulk_update_labels_data(selected_labels, cleansingResults){
+    /*  Build an array of objects, each defining a label to be applied to a set of buildings
 
-        var bulk_update_labels_data = [];
+        @param  selected_labels     a set of label objects 
+        @param  cleansingResults    a 'cleansingResults' object, which contains an array of objects,
+                                    each with a cleansing_results array that contains an array of errors
+                                    for that row.
+
+        @returns  array             returns an array of 'bulk label update' data. See service for object defintion.
+                                    TODO: This may warrant a defined value object to formalize properties.
+
+
+                                    
+
+     */
+    function build_bulk_apply_labels_data(selected_labels, cleansingResults){
+
+        var bulk_apply_labels_data = [];
         
         _.each(selected_labels, function(label){
              
             var update_label_data = {
                 label_id: label.id,
-                building_ids: []
+                add_to_building_ids: []
             };
-
-            //collect all building ids this label should be applied to
-            _.each(cleansingResults, function(cleansingResult){
-                if (_.findWhere(cleansingResult.cleansing_results, {message: label.name})){
-                    update_label_data.building_ids.push(cleansingResult.id);
+                         
+            // If the current label's name appears at least once as an error 'message' 
+            // in a building's set of error rows, we'll apply the label to that building id.
+            _.each(cleansingResults, function(cleansingResult){   
+                var error_exists = _.findWhere(cleansingResult.cleansing_results, {message: label.name});
+                if (error_exists){                    
+                    update_label_data.add_to_building_ids.push(cleansingResult.id);
                 }
             });
 
             //assign defaults for a new label created during data cleansing
-            if (update_label_data.label_id===null){
-                update_label.label_name = label.name;                 
-                update_label_data.color = "red";
-                update_label_data.label = "danger";
+            if (label.id===null){
+                update_label_data.label_name = label.name;                 
+                update_label_data.label_color = "red";
             }
 
-            bulk_update_labels_data.push( update_label_data );
+            bulk_apply_labels_data.push( update_label_data );
         
         });
 
-        return bulk_update_labels_data;
+
+        return bulk_apply_labels_data;
+                
     }
 
    
