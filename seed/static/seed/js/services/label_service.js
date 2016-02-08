@@ -257,8 +257,7 @@ angular.module('BE.seed.service.label',
     Note that building ids should be canonical snapshots.
 
     */
-
-    function bulk_update_building_labels(label_ids, update_objs) {
+    function cleansing_building_labels(label_ids, building_ids, update_objs) {
 
         //VALIDATE ARGUMENTS
         //A bit defensive coding : let's test to make sure 
@@ -272,29 +271,33 @@ angular.module('BE.seed.service.label',
         _.each(update_objs, function(update_obj){
             if (angular.isNumber(update_obj.label_id)===false && update_obj.label_id!==null){
                 throw "Invalid property: label_id must be an integer or 'null'";
-            }            
+            }
             //if id is null, the new label properties should be defined
             if (update_obj.label_id===null){
                 if (!angular.isDefined(update_obj.label_name)){
                     throw "Invalid property: label_name must be defined";
-                }   
+                }
                 if (!angular.isDefined(update_obj.label_color)){
                     throw "Invalid property: label_color must be defined";
-                }  
+                }
                 if (!angular.isDefined(update_obj.label_label)){
                     throw "Invalid property: label_label must be defined";
-                }  
+                }
             }
         });
 
         //MAKE SERVER CALL
         var defer = $q.defer();
         $http({
-            method: 'PUT',            
-            'url': window.BE.urls.bulk_update_building_labels,
+            method: 'PUT',
+            'url': window.BE.urls.cleansing_building_labels,
             'data': {
-                'label_ids' : label_ids,
-                'updates'   : update_objs
+                'building_ids': building_ids,
+                'label_ids': label_ids,
+                'updates': update_objs
+            },
+            'params': {
+                'organization_id': user_service.get_organization().id
             }
         }).success(function(data, status, headers, config) {
             defer.resolve(data);
@@ -303,8 +306,6 @@ angular.module('BE.seed.service.label',
         });
         return defer.promise;
     }
-
-
 
 
     /*  Gets the list of supported colors for labels, based on default bootstrap

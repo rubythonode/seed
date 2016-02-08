@@ -60,5 +60,5 @@ class SimpleBuildingFilterBackend(filters.BaseFilterBackend):
     """
     def filter_queryset(self, request, queryset, view):
         return queryset.filter(
-            id__in=request.query_params.getlist('building_ids')
+            id__in=request.data.get('building_ids')
         )

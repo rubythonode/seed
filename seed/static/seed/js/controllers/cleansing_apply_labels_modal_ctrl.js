@@ -84,7 +84,10 @@ angular.module('BE.seed.controller.cleansing_apply_labels_modal_ctrl', [])
             return label.is_checked_add===true;
         });
         var label_ids = _.pluck(selected_labels, 'id');
-        var bulk_updates = build_bulk_update_labels_data(selected_labels, $scope.cleansingResults);  
+        var bulk_updates = build_bulk_update_labels_data(selected_labels, $scope.cleansingResults);
+
+        // TODO need building ids here.
+        var building_ids = [];
 
         //save number of labels for complete message
         $scope.num_labels_applied = label_ids.length;
@@ -92,7 +95,7 @@ angular.module('BE.seed.controller.cleansing_apply_labels_modal_ctrl', [])
         //TODO: show progress
 
         //do call
-        label_service.bulk_update_building_labels(label_ids, bulk_updates).then(
+        label_service.cleansing_building_labels(label_ids, building_ids, bulk_updates).then(
             function(data){
                 //if labels were applied successfully, 
                 //switch mode of modal to show success message and 'done'
