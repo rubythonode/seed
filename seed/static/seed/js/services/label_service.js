@@ -233,7 +233,6 @@ angular.module('BE.seed.service.label',
     TODO: At some point this method should be made more generic, so that it's not coupled directly
     to data cleansing (semantically or otherwise) and allows removing labels from buildings.
     
-
     @param {array} apply_label_objs     An array of objects, each of which defines a label id and an array
                                         of buildings to apply that label to.
 
@@ -257,7 +256,7 @@ angular.module('BE.seed.service.label',
 
     */
 
-    function apply_cleansing_labels(apply_label_objs) {
+    function apply_cleansing_building_labels(apply_label_objs) {
 
         //VALIDATE ARGUMENTS
         //A bit defensive coding : let's test to make sure 
@@ -276,33 +275,33 @@ angular.module('BE.seed.service.label',
             }  
             //if id is null, the new label properties should be defined
             if (apply_label_obj.label_id===null){
-                if (!angular.isDefined(apply_label_obj.label_name)){
-                    throw "Invalid property: label_name must be defined";
-                }   
-                if (!angular.isDefined(apply_label_obj.label_color)){
+                if (!angular.isDefined(update_obj.label_color)){
                     throw "Invalid property: label_color must be defined";
-                }  
+                }
+                if (!angular.isDefined(update_obj.label_label)){
+                    throw "Invalid property: label_label must be defined";
+                }
             }
         });
         
         //BUILD EXTRA PROPERTIES FOR CALL
-        //Because of the way django-rest works, we have to build two 'extra' properties for the server.
-        //These properties indicate which labels and buildings are involved in the operation
+        //Because of the way django-rest works, we have to build two extra properties for the server.
+        //These properties indicate which labels and buildings are involved in the apply operation
         var label_ids = _(apply_label_objs).chain().pluck('label_id').uniq().compact().value();  
         var building_ids = _(apply_label_objs).chain().pluck('add_to_building_ids').union().uniq().value();
 
         //MAKE SERVER CALL        
         var defer = $q.defer();
         $http({
-            method: 'PUT',            
-            'url': window.BE.urls.apply_cleansing_labels,
+            method: 'PUT',
+            'url': window.BE.urls.cleansing_building_labels,
+            'data': {
+                'building_ids': building_ids,
+                'label_ids': label_ids,
+                'updates': update_objs
+            },
             'params': {
                 'organization_id': user_service.get_organization().id
-            },
-            'data' : {
-                'label_ids'     : label_ids,
-                'building_ids'  : building_ids,
-                'updates'       : apply_label_objs
             }
         }).success(function(data, status, headers, config) {
             defer.resolve(data);
@@ -311,8 +310,6 @@ angular.module('BE.seed.service.label',
         });
         return defer.promise;
     }
-
-
 
     /*  Gets the list of supported colors for labels, based on default bootstrap
         styles for labels. These are defined locally.

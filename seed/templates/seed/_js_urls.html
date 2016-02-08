@@ -38,9 +38,7 @@
         //label management urls
         window.BE.urls.label_list                   = '{% url "labels:label-list" %}';
         window.BE.urls.update_building_labels       = '{% url "labels:update_building_labels" %}';
-        window.BE.urls.apply_cleansing_labels       = '{% url "labels:cleansing_building_labels" %}';
-        //enable when Nick creates route and method
-        //window.BE.urls.bulk_update_building_labels  
+        window.BE.urls.cleansing_building_labels    = '{% url "labels:cleansing_building_labels" %}'
 
         // uploader URLS
         window.BE.urls.uploader_signature_endpoint  = '{% url "data_importer:sign_policy_document" %}';

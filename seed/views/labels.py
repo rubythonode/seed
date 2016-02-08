@@ -158,7 +158,7 @@ class CleansingBuildingLabelsAPIView(generics.GenericAPIView):
 
     def put(self, *args, **kwargs):
         """
-        Payload:
+        PUT Payload:
         {
             label_ids: [1, 2],
             building_ids: [1, 2, 3, 4],
