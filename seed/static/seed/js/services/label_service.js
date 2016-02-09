@@ -274,12 +274,12 @@ angular.module('BE.seed.service.label',
                 throw "Invalid argument. add_to_building_ids must be an array with one or more elements.";
             }  
             //if id is null, the new label properties should be defined
-            if (apply_label_obj.label_id===null){
-                if (!angular.isDefined(update_obj.label_color)){
-                    throw "Invalid property: label_color must be defined";
+            if (apply_label_obj.label_id===null){                
+                if (!angular.isDefined(apply_label_obj.label_name)){
+                    throw "Invalid property: label_name must be defined";
                 }
-                if (!angular.isDefined(update_obj.label_label)){
-                    throw "Invalid property: label_label must be defined";
+                if (!angular.isDefined(apply_label_obj.label_color)){
+                    throw "Invalid property: label_color must be defined";
                 }
             }
         });
@@ -288,7 +288,7 @@ angular.module('BE.seed.service.label',
         //Because of the way django-rest works, we have to build two extra properties for the server.
         //These properties indicate which labels and buildings are involved in the apply operation
         var label_ids = _(apply_label_objs).chain().pluck('label_id').uniq().compact().value();  
-        var building_ids = _(apply_label_objs).chain().pluck('add_to_building_ids').union().uniq().value();
+        var building_ids = _(apply_label_objs).chain().pluck('add_to_building_ids').flatten().union().uniq().value();
 
         //MAKE SERVER CALL        
         var defer = $q.defer();
@@ -298,7 +298,7 @@ angular.module('BE.seed.service.label',
             'data': {
                 'building_ids': building_ids,
                 'label_ids': label_ids,
-                'updates': update_objs
+                'updates': apply_label_objs
             },
             'params': {
                 'organization_id': user_service.get_organization().id
