@@ -14,9 +14,9 @@
         <div ng-show="status!==STATUS_COMPLETE"
             class="row" >
 
-            <div ng-show="status===STATUS_ERROR" 
+            <div ng-show="apply_labels_error" 
                 class="alert alert-danger " >
-                <strong>Error</strong> {$ apply_labels_error $} </strong>.
+                {$ apply_labels_error $}</strong>.
             </div>          
 
             <div class="edit_text" style="margin-bottom:20px;">
@@ -52,8 +52,9 @@
 
 
         <div ng-show="apply_labels_complete">
-            <div class="col-sm-12" ng-show="delete_state == 'success'">
-                {$ have been applied to relevant rows.
+            <div class="col-sm-12" 
+                ng-show="status===STATUS_COMPLETE">
+                {$ num_labels_applied $} cleansing error labels have been applied to relevant rows.
             </div>
         </div>
 

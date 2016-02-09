@@ -103,7 +103,7 @@ angular.module('BE.seed.controller.cleansing_apply_labels_modal_ctrl', [])
             function(data, status) {
                 // Rejected promise, error occurred.
                 // TODO: Make this nicer...just doing alert for development
-                $scope.apply_labels_error = "Error applying labels.";
+                $scope.apply_labels_error = "Error applying labels. Please try again or contact support.";
                 $scope.status = $scope.STATUS_READY;  
             }       	
         );
