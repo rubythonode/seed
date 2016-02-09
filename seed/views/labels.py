@@ -165,18 +165,18 @@ class CleansingBuildingLabelsAPIView(generics.GenericAPIView):
             updates: [
                 {
                   label_id: 1,
-                  building_ids: [1,2,3]
+                  add_to_building_ids: [1,2,3]
                 },
                 {
                   label_id: 2,
-                  building_ids: [3,4,]
+                  add_to_building_ids: [3,4,]
                 },
                 {
                    label_id: null,
                    label_name: "new label",
                    label_color: "red",
                    label_label: "primary",
-                   building_ids : [1, 4]
+                   add_to_building_ids : [1, 4]
                 }
             ]
         }

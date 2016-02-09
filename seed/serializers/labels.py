@@ -138,7 +138,7 @@ class CleansingBuildingLabelsSerializer(serializers.Serializer):
                 )
 
             # Add label to each building in add list
-            for building_id in update['building_ids']:
+            for building_id in update['add_to_building_ids']:
                 building = building_map[building_id]
 
                 # Add inactive canonical building if one doesn't exist.
