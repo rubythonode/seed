@@ -97,7 +97,7 @@ class UpdateBuildingLabelsSerializer(serializers.Serializer):
 class CleansingBuildingLabelsSerializer(serializers.Serializer):
     label_ids = serializers.ListSerializer(
         child=fields.IntegerField(),
-        allow_empty=False,
+        allow_empty=True,
     )
     updates = serializers.ListSerializer(
         child=fields.DictField(),
