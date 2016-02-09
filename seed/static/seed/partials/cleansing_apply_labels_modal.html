@@ -24,7 +24,6 @@
                 select the error labels you want marked from the list below.</div>
 
             <div class="table-list-container"  >
-
                 <table ng-show="errorLabels.length > 0" class="table table-striped">
                     <tr ng-repeat="label in errorLabels">
                         <td class="label_column">
@@ -42,7 +41,6 @@
                                     ng-class="{'btn-primary':label.is_checked_add}"
                                     >Select
                             </button>
-
                         </td>
                     </tr>
                 </table>
@@ -50,11 +48,14 @@
 
         </div>
 
-
-        <div ng-show="apply_labels_complete">
-            <div class="col-sm-12" 
-                ng-show="status===STATUS_COMPLETE">
-                {$ num_labels_applied $} cleansing error labels have been applied to relevant rows.
+         <div ng-show="status===STATUS_COMPLETE" class="row">
+            <div>
+                <ng-pluralize 
+                    count="num_labels_applied" 
+                    when="{'1':     'One cleansing error label has been applied to relevant building rows.', 
+                           'other': '{} cleansing error labels have been applied to relevant building rows.'
+                          }">
+                </ng-pluralize>                
             </div>
         </div>
 
