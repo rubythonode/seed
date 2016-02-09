@@ -415,6 +415,7 @@ angular.module('BE.seed.service.label',
         apply_cleansing_building_labels: apply_cleansing_building_labels,
         get_available_colors : get_available_colors,
         create_temp_label : create_temp_label,
+        update_label_w_local_props: update_label_w_local_props
     
     };
 
