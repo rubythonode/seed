@@ -227,12 +227,24 @@ angular.module('BE.seed.controller.cleansing', [])
     function create_error_labels(uniqueErrorMessagesArr, existingLabelsArr){
 
       var allErrorLabels = angular.copy(existingLabelsArr);
+
+      //Assign local label properties to labels that have an id. 
+      //This usually happens during a label_service call (and should be internal to label_service)
+      //but in this controller, the labels come in directly with cleansing results
+      //so we have to assign local label properties manually.
+      _.each(allErrorLabels, function(label){
+        if (angular.isNumber(label.id)){
+          label_service.update_label_w_local_props(label);
+        }
+      });      
       
+      //Create 'temporary' labels for error messages in cleansing
+      //that don't have an existing label.   
       _.each(uniqueErrorMessagesArr, function (errorMessage){
         if (_.findWhere(existingLabelsArr, {name: errorMessage})===undefined){
           var newTempLabel = label_service.create_temp_label(errorMessage, 'red');
           allErrorLabels.push(newTempLabel);
-        }
+        } 
       });
 
       return allErrorLabels;
