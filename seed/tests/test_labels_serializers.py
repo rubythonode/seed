@@ -289,17 +289,17 @@ class TestCleansingBuildingLabelsSerializer(TestCase):
             'updates': [
                 {
                     'label_id': label_a.pk,
-                    'building_ids': [bs_1.pk]
+                    'add_to_building_ids': [bs_1.pk]
                 },
                 {
                     'label_id': label_b.pk,
-                    'building_ids': [bs_2.pk]
+                    'add_to_building_ids': [bs_2.pk]
                 },
                 { 
                     'label_id': None,
                     'label_name': "new label",
                     'label_color': "red",
-                    'building_ids' : [bs_2.pk]
+                    'add_to_building_ids' : [bs_2.pk]
                 }
             ],
         }
