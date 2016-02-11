@@ -144,7 +144,7 @@ class CleansingBuildingLabelsSerializer(serializers.Serializer):
                 # Add inactive canonical building if one doesn't exist.
                 if not building.canonical_building:
                     c = CanonicalBuilding.objects.create(
-                        active=False,
+                        active=True,
                         canonical_snapshot=building
                     )
                     building.canonical_building = c
