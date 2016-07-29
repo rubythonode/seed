@@ -24,6 +24,40 @@ from seed.utils.time import convert_to_js_timestamp
 _log = logging.getLogger(__name__)
 
 
+class TryMultiParamViewSetA(viewsets.ViewSet):
+    def retrieve(self, request, pk=None):
+        """
+        Let's get this working now!
+        ---
+        parameter_strategy: replace
+        parameters:
+            - name: pk
+              description: "Primary Key"
+              required: true
+              paramType: path
+        """
+        return HttpResponse("Made it into the first level, with pk = " + str(pk))
+
+
+class TryMultiParamViewSetB(viewsets.ViewSet):
+    def retrieve(self, request, firstvars_pk=None, pk=None):
+        """
+        Let's get this working now!
+        ---
+        parameter_strategy: replace
+        parameters:
+            - name: firstvars_pk
+              description: "The key to firstvars"
+              required: true
+              paramType: path
+            - name: pk
+              description: "The key for this one"
+              required: true
+              paramType: path
+        """
+        return HttpResponse("Made it into the second level, with firstvars_pk = " + str(firstvars_pk) + "; and pk = " + str(pk))
+
+
 class DatasetViewSet(LoginRequiredMixin, viewsets.ViewSet):
     @require_organization_id_class
     @api_endpoint_class
