@@ -1,30 +1,11 @@
 from __future__ import unicode_literals
 
-from django.db import models, migrations
 from django.core.management.base import BaseCommand
 from seed.lib.superperms.orgs.models import Organization
-from django.apps import apps
-import pdb
-import copy
-import collections
-import os
 import datetime
-#import networkx as nx
-#import matplotlib.pyplot as plt
-#import pygraphviz
 import logging
 import itertools
-# from IPython import embed
-#from networkx.drawing.nx_agraph import graphviz_layout
 import seed.models
-# import numpy as np
-# from scipy.sparse import dok_matrix
-# from scipy.sparse.csgraph import connected_components
-from _localtools import projection_onto_index
-from _localtools import get_static_building_snapshot_tree_file
-from _localtools import read_building_snapshot_tree_structure
-from _localtools import get_core_organizations
-from _localtools import get_node_sinks
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -45,6 +26,7 @@ tax_lot_extra_data_map["1552813"] = {"Owner City": "Rust",
                                      "Owner State": "CA",
                                      "Owner Zip": "94930",
                                      "Tax Class": "5",
+                                     "taxlot_extra_data_field_1": "taxlot_extra_data_field_1552813",
                                      "City Code": "392-129"}
 
 tax_lot_extra_data_map["11160509"] = {"Owner City": "Cleveland",
@@ -59,6 +41,7 @@ tax_lot_extra_data_map["11160509"] = {"Owner City": "Cleveland",
                                       "Owner State": "OH",
                                       "Owner Zip": "93029",
                                       "Tax Class": "4",
+                                      "taxlot_extra_data_field_1": "taxlot_extra_data_field_11160509",
                                       "City Code": "502-561"}
 
 tax_lot_extra_data_map["33366555"] =  {"Owner City": "Seattle",
@@ -73,6 +56,7 @@ tax_lot_extra_data_map["33366555"] =  {"Owner City": "Seattle",
                                        "Owner State": "WA",
                                        "Owner Zip": "",
                                        "Tax Class": "4",
+                                       "taxlot_extra_data_field_1": "taxlot_extra_data_field_33366555",
                                        "City Code": "562-123"}
 
 
@@ -89,6 +73,7 @@ tax_lot_extra_data_map["33366125"] = {"Owner City": "Rust",
                                       "Owner State": "CA",
                                       "Owner Zip": "",
                                       "Tax Class": "2",
+                                      "taxlot_extra_data_field_1": "taxlot_extra_data_field_33366125",
                                       "City Code": "612-846"}
 
 tax_lot_extra_data_map["33366148"] = {"Owner City": "Seattle",
@@ -103,6 +88,7 @@ tax_lot_extra_data_map["33366148"] = {"Owner City": "Seattle",
                                       "Owner State": "WA",
                                       "Owner Zip": "",
                                       "Tax Class": "4",
+                                      "taxlot_extra_data_field_1": "taxlot_extra_data_field_33366148",
                                       "City Code": "955-225N"}
 
 property_extra_data_map = {}
@@ -111,6 +97,7 @@ property_extra_data_map[2264] = { "CoStar Property ID": "2312456",
                                   "Compliance Required": "Y",
                                   "County": "Contra Costa",
                                   "Date / Last Personal Correspondence": "2/5/2016",
+                                  "property_extra_data_field_1": "property_extra_data_field_2254",
                                   "Does Not Need to Comply": "" }
 
 property_extra_data_map[3020139] = {"CoStar Property ID" : "2453125",
@@ -118,6 +105,7 @@ property_extra_data_map[3020139] = {"CoStar Property ID" : "2453125",
                                     "Compliance Required" : "Y",
                                     "County" : "Contra Costa",
                                     "Date / Last Personal Correspondence" : "5/6/2016",
+                                    "property_extra_data_field_1": "property_extra_data_field_3020139",
                                     "Does Not Need to Comply" : ""}
 
 property_extra_data_map[4828379] = {"CoStar Property ID" : "1245683",
@@ -125,6 +113,7 @@ property_extra_data_map[4828379] = {"CoStar Property ID" : "1245683",
                                     "Compliance Required" : "Y",
                                     "County" : "Contra Costa",
                                     "Date / Last Personal Correspondence" : "5/12/2016",
+                                    "property_extra_data_field_1": "property_extra_data_field_4828379",
                                     "Does Not Need to Comply" : ""}
 
 property_extra_data_map[1154623] = {"CoStar Property ID" : "4467856",
@@ -132,6 +121,7 @@ property_extra_data_map[1154623] = {"CoStar Property ID" : "4467856",
                                     "Compliance Required" : "Y",
                                     "County" : "Contra Costa",
                                     "Date / Last Personal Correspondence" : "5/6/2016",
+                                    "property_extra_data_field_1": "property_extra_data_field_1154623",
                                     "Does Not Need to Comply" : ""}
 
 property_extra_data_map[5233255] = {"CoStar Property ID" : "1234856",
@@ -139,6 +129,7 @@ property_extra_data_map[5233255] = {"CoStar Property ID" : "1234856",
                                     "Compliance Required" : "Y",
                                     "County" : "Contra Costa",
                                     "Date / Last Personal Correspondence" : "3/15/2016",
+                                    "property_extra_data_field_1": "property_extra_data_field_5233255",
                                     "Does Not Need to Comply" : ""}
 
 property_extra_data_map[1311523] = {"CoStar Property ID" : "5412648",
@@ -146,6 +137,7 @@ property_extra_data_map[1311523] = {"CoStar Property ID" : "5412648",
                                     "Compliance Required" : "Y",
                                     "County" : "Contra Costa",
                                     "Date / Last Personal Correspondence" : "",
+                                    "property_extra_data_field_1": "property_extra_data_field_1311523",
                                     "Does Not Need to Comply" : ""}
 
 property_extra_data_map[1311524] = {"CoStar Property ID" : "5123456",
@@ -153,6 +145,7 @@ property_extra_data_map[1311524] = {"CoStar Property ID" : "5123456",
                                     "Compliance Required" : "Y",
                                     "County" : "Contra Costa",
                                     "Date / Last Personal Correspondence" : "",
+                                    "property_extra_data_field_1": "property_extra_data_field_1311524",
                                     "Does Not Need to Comply" : ""}
 
 property_extra_data_map[1311525] = {"CoStar Property ID" : "2154532",
@@ -160,6 +153,7 @@ property_extra_data_map[1311525] = {"CoStar Property ID" : "2154532",
                                     "Compliance Required" : "Y",
                                     "County" : "Contra Costa",
                                     "Date / Last Personal Correspondence" : "",
+                                    "property_extra_data_field_1": "property_extra_data_field_1311525",
                                     "Does Not Need to Comply" : ""}
 
 property_extra_data_map[1311526] = {"CoStar Property ID" : "754863",
@@ -167,6 +161,7 @@ property_extra_data_map[1311526] = {"CoStar Property ID" : "754863",
                                     "Compliance Required" : "Y",
                                     "County" : "Contra Costa",
                                     "Date / Last Personal Correspondence" : "",
+                                    "property_extra_data_field_1": "property_extra_data_field_1311526",
                                     "Does Not Need to Comply" : ""}
 
 property_extra_data_map[1311527] = {"CoStar Property ID" : "1154286",
@@ -174,6 +169,7 @@ property_extra_data_map[1311527] = {"CoStar Property ID" : "1154286",
                                     "Compliance Required" : "Y",
                                     "County" : "Contra Costa",
                                     "Date / Last Personal Correspondence" : "5/5/2015",
+                                    "property_extra_data_field_1": "property_extra_data_field_1311527",
                                     "Does Not Need to Comply" : ""}
 
 property_extra_data_map[1311528] = {"CoStar Property ID" : "2145954",
@@ -181,6 +177,7 @@ property_extra_data_map[1311528] = {"CoStar Property ID" : "2145954",
                                     "Compliance Required" : "N",
                                     "County" : "",
                                     "Date / Last Personal Correspondence" : "",
+                                    "property_extra_data_field_1": "property_extra_data_field_1311528",
                                     "Does Not Need to Comply" : "X"}
 
 property_extra_data_map[6798215] = {"CoStar Property ID" : "",
@@ -188,11 +185,11 @@ property_extra_data_map[6798215] = {"CoStar Property ID" : "",
                                     "Compliance Required" : "",
                                     "County" : "Contra Costa",
                                     "Date / Last Personal Correspondence" : "",
+                                    "property_extra_data_field_1": "extra_data_field_6798215",
                                     "Does Not Need to Comply" : ""}
 
-
-def create_structure():
-    org = Organization.objects.create(name = "SampleDataDemo_caseA")
+def create_individual_orgs():
+    org, _ = Organization.objects.get_or_create(name = "SampleDataDemo_caseA")
     create_cycle(org)
     create_case_A_objects(org)
 
@@ -208,12 +205,26 @@ def create_structure():
     create_cycle(org)
     create_case_D_objects(org)
 
+    return
+    
+def create_one_org_with_all_cases():
     org, _ = Organization.objects.get_or_create(name = "SampleDataDemo_caseALL")
     create_cycle(org)
     create_case_A_objects(org)
     create_case_B_objects(org)
     create_case_C_objects(org)
     create_case_D_objects(org)
+    
+    return
+
+def create_structure():
+    # currently there is a duplicate data error if both cases are run
+    # there are some notes below in create_cases about the nature of the 
+    # problem but since currently only the all_cases is required what is
+    # here works
+    
+    #create_individual_orgs()
+    create_one_org_with_all_cases()
 
     return
 
@@ -228,44 +239,83 @@ def create_cycle(org):
 
 def create_cases(org, tax_lots, properties):
     cycle = seed.models.Cycle.objects.filter(organization=org).first()
-
+    
     for (tl_def, prop_def) in itertools.product(tax_lots, properties):
-        property, _ = seed.models.Property.objects.get_or_create(organization=org)
-        taxlot, _ = seed.models.TaxLot.objects.get_or_create(organization=org)
-
+        
         # Doesn't match
         # LINE 1: ...1'::date AND "bluesky_propertystate"."extra_data" = '{"Does ...
         # HINT:  No operator matches the given name and argument type(s). You might need to add explicit type casts.
-
         tax_extra_data = tax_lot_extra_data_map[tl_def["jurisdiction_taxlot_identifier"]]
         prop_extra_data = property_extra_data_map[prop_def["building_portfolio_manager_identifier"]]
 
-
         print "Adding {} prop extra datas.".format(prop_extra_data)
 
-        prop_state, _ = seed.models.PropertyState.objects.get_or_create(**prop_def)
+        # states don't have an org and since this script was doing all buildings twice 
+        # (once for individual, once for _caseALL).  So if the get_or_create returns 
+        # an existing one then it still is unknown if it is something that already exists.
+        # Check the view model to see if there is something with this state and this org.
+        # If it doesn't exist then create one.  If it does exist than that is correct (hopefully)
+        # 
+        # FIXME.  In the instance where this script is creating both individual cases and _caseALL this
+        # throws an error for some taxlots that multiple are returned.  Since TaxLotState does not depend 
+        # on an org I think this might have to go something like filter the view for this org and a state that  
+        # has fields that match **state_def.  However per Robin we are OK just restricting things to 
+        # the _caseALLL case for now so this is not currently a problem.
+        def _create_state(view_model, state_model, org, state_def):
+            state, created = state_model.objects.get_or_create(**state_def)
+            if not created and not view_model.objects.filter(state=state).filter(cycle__organization=org).exists():
+                state = state_model.objects.create(**state_def)
+                created = True
+            return state, created
+        
+        prop_state, property_state_created = _create_state(seed.models.PropertyView, 
+                                                          seed.models.PropertyState,                                                      
+                                                          org,
+                                                          prop_def)
 
         for k in prop_extra_data:
             prop_state.extra_data[k] = prop_extra_data[k]
 
         prop_state.save()
-
-        taxlot_state, _ = seed.models.TaxLotState.objects.get_or_create(**tl_def)
+         
+        taxlot_state, taxlot_state_created = _create_state(seed.models.TaxLotView, 
+                                                          seed.models.TaxLotState,                                                          
+                                                          org,
+                                                          tl_def)
+        
 
         for k in tax_extra_data:
             taxlot_state.extra_data[k] = tax_extra_data[k]
 
         taxlot_state.save()
+        
+        
+        # Moved the property and taxlot items below the state items because they only depend on an org
+        # So if they are just left at the top as get_or_create(organization=org) then there will only 
+        # be one property created per org.  Instead for creating this data if the state was created
+        # then a property/taxlot needs to be created too.        
+        if property_state_created:
+            property = seed.models.Property.objects.create(organization=org)
+        else:
+            # else the propery_state already existed so there should also be a PropertyView
+            # with this with this property_state.  Find and use that property.
+            property = seed.models.PropertyView.objects.filter(state=prop_state).filter(property__organization=org)[0].property
+             
+        
+        if taxlot_state_created:
+            taxlot = seed.models.TaxLot.objects.create(organization=org)
+        else:
+            # else the taxlot_state already existed so there should also be a TaxlotView
+            # with this with this taxlot_state.  Find and use that taxlot.
+            taxlot = seed.models.TaxLotView.objects.filter(state=taxlot_state).filter(taxlot__organization=org)[0].taxlot
 
 
-        taxlot_view, _ = seed.models.TaxLotView.objects.get_or_create(taxlot = taxlot, cycle=cycle, state = taxlot_state)
-        prop_view, _ = seed.models.PropertyView.objects.get_or_create(property=property, cycle=cycle, state = prop_state)
+        taxlot_view, created = seed.models.TaxLotView.objects.get_or_create(taxlot = taxlot, cycle=cycle, state = taxlot_state)
+        prop_view, created = seed.models.PropertyView.objects.get_or_create(property=property, cycle=cycle, state = prop_state)
 
-        seed.models.TaxLotProperty.objects.get_or_create(property_view = prop_view, taxlot_view = taxlot_view, cycle = cycle)
+        tlp, created = seed.models.TaxLotProperty.objects.get_or_create(property_view = prop_view, taxlot_view = taxlot_view, cycle = cycle)
 
     return
-
-
 
 def create_case_A_objects(org):
     tax_lots = [ {"jurisdiction_taxlot_identifier":"1552813",
@@ -292,6 +342,7 @@ def create_case_A_objects(org):
 
 
 def create_case_B_objects(org):
+
     tax_lots = [ {"jurisdiction_taxlot_identifier":"11160509",
                   "address": "2655 Welstone Ave NE",
                   "city": "Rust",
@@ -345,6 +396,7 @@ def create_case_B_objects(org):
 
 
 def create_case_C_objects(org):
+
     tax_lots = [ {"jurisdiction_taxlot_identifier":"33366555",
                   "address": "521 Elm Street",
                   "city": "Rust"},
@@ -375,6 +427,7 @@ def create_case_C_objects(org):
 
 
 def create_case_D_objects(org):
+
     tax_lots = [ {"jurisdiction_taxlot_identifier":"24651456",
                   "address": "11 Ninth Street",
                   "city": "Rust",
@@ -392,6 +445,7 @@ def create_case_D_objects(org):
                  }]
 
     campus = [{ "building_portfolio_manager_identifier": 1311523,
+                "pm_parent_property_id" : 1311523,
                 "property_name": "Lucky University ",
                 "address_line_1": "11 Ninth Street",
                 "city": "Rust",
@@ -407,6 +461,7 @@ def create_case_D_objects(org):
 
     properties = [
         { "building_portfolio_manager_identifier": 1311524,
+         "pm_parent_property_id" : 1311523,
           "property_name": "Grange Hall ",
           "address_line_1": "12 Ninth Street",
           "city": "Rust",
@@ -420,6 +475,7 @@ def create_case_D_objects(org):
           "owner_telephone": "224-587-5602",
           "property_notes": "Case D: Campus with Multiple associated buildings"},
         { "building_portfolio_manager_identifier": 1311525,
+         "pm_parent_property_id" : 1311523,
           "property_name": "Biology Hall ",
           "address_line_1": "20 Tenth Street",
           "city": "Rust",
@@ -434,6 +490,7 @@ def create_case_D_objects(org):
           "property_notes": "Case D: Campus with Multiple associated buildings"},
 
                   { "building_portfolio_manager_identifier": 1311526,
+                   "pm_parent_property_id" : 1311523,
                     "property_name": "Rowling Gym ",
                     "address_line_1": "35 Tenth Street",
                     "city": "Rust",
@@ -448,6 +505,7 @@ def create_case_D_objects(org):
                     "property_notes": "Case D: Campus with Multiple associated buildings"},
 
                   { "building_portfolio_manager_identifier": 1311527,
+                   "pm_parent_property_id" : 1311523,
                     "property_name": "East Computing Hall ",
                     "address_line_1": "93029 Wellington Blvd",
                     "city": "Rust",
@@ -461,6 +519,7 @@ def create_case_D_objects(org):
                     "owner_telephone": "224-587-5602",
                     "property_notes": "Case D: Campus with Multiple associated buildings"},
         { "building_portfolio_manager_identifier": 1311528,
+         "pm_parent_property_id" : 1311523,
           "property_name": "International House",
           "address_line_1": "93029 Wellington Blvd",
           "city": "Rust",
@@ -476,17 +535,30 @@ def create_case_D_objects(org):
 
     # I manually create everything here
     cycle = seed.models.Cycle.objects.filter(organization=org).first()
+        
+    def add_extra_data(state, extra_data):
+        if not extra_data:
+            return state
+        
+        for k in extra_data:
+            state.extra_data[k] = extra_data[k]
+        state.save()
+        return state
 
     campus_property, __ = seed.models.Property.objects.get_or_create(organization=org, campus=True)
-    property_objs  = [seed.models.Property.objects.get_or_create(organization=org, parent_property=campus_property)[0] for p in properties]
+    property_objs  = [seed.models.Property.objects.create(organization=org, parent_property=campus_property) for p in properties]
 
     property_objs.insert(0, campus_property)
-    taxlot_objs = [seed.models.TaxLot.objects.get_or_create(organization=org)[0] for t in tax_lots]
+    taxlot_objs = [seed.models.TaxLot.objects.create(organization=org) for t in tax_lots]
 
     property_states = [seed.models.PropertyState.objects.get_or_create(**prop_def)[0] for prop_def in itertools.chain(campus, properties)]
+    property_states = [add_extra_data(ps, property_extra_data_map.get(ps.building_portfolio_manager_identifier)) for ps in property_states]
+    
     property_views = [seed.models.PropertyView.objects.get_or_create(property=property, cycle=cycle, state = prop_state)[0] for (property, prop_state) in zip(property_objs, property_states)]
 
     taxlot_states = [seed.models.TaxLotState.objects.get_or_create(**lot_def)[0] for lot_def in tax_lots]
+    taxlot_states = [add_extra_data(tls, tax_lot_extra_data_map.get(tls.jurisdiction_taxlot_identifier)) for tls in taxlot_states]
+    
     taxlot_views = [seed.models.TaxLotView.objects.get_or_create(taxlot=taxlot, cycle=cycle, state = taxlot_state)[0] for (taxlot, taxlot_state) in zip(taxlot_objs, taxlot_states)]
 
     seed.models.TaxLotProperty.objects.get_or_create(property_view = property_views[0], taxlot_view = taxlot_views[0], cycle = cycle)
