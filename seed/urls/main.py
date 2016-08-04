@@ -30,15 +30,15 @@ from seed.views.main import (
     delete_buildings, delete_organization
 )
 
-from seed.views.datasets import DatasetViewSet, TryMultiParamViewSetA, TryMultiParamViewSetB
+from seed.views.datasets import DatasetViewSet, NestedOrganizationsBaseViewSet, NestedOrganizationUserViewSet
 from seed.views.organizations import OrganizationViewSet
 from rest_framework import routers
 from rest_framework_nested import routers as nested_routers
 
 nested_router_a = nested_routers.SimpleRouter()
-nested_router_a.register(r'firstvars', TryMultiParamViewSetA, base_name="firstvars")
-nested_router_b = nested_routers.NestedSimpleRouter(nested_router_a, r'firstvars', lookup='firstvars')
-nested_router_b.register(r'secondvars', TryMultiParamViewSetB, base_name="secondvars")
+nested_router_a.register(r'organizations', NestedOrganizationsBaseViewSet, base_name="organizations")
+nested_router_b = nested_routers.NestedSimpleRouter(nested_router_a, r'organizations', lookup='organizations')
+nested_router_b.register(r'users', NestedOrganizationUserViewSet, base_name="users")
 
 api_v2_router = routers.DefaultRouter()
 api_v2_router.register(r'datasets', DatasetViewSet, base_name="datasets")

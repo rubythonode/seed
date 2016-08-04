@@ -24,7 +24,7 @@ from seed.utils.time import convert_to_js_timestamp
 _log = logging.getLogger(__name__)
 
 
-class TryMultiParamViewSetA(viewsets.ViewSet):
+class NestedOrganizationsBaseViewSet(viewsets.ViewSet):
     def retrieve(self, request, pk=None):
         """
         Let's get this working now!
@@ -32,30 +32,30 @@ class TryMultiParamViewSetA(viewsets.ViewSet):
         parameter_strategy: replace
         parameters:
             - name: pk
-              description: "Primary Key"
+              description: "The organization ID (primary key)"
               required: true
               paramType: path
         """
         return HttpResponse("Made it into the first level, with pk = " + str(pk))
 
 
-class TryMultiParamViewSetB(viewsets.ViewSet):
-    def retrieve(self, request, firstvars_pk=None, pk=None):
+class NestedOrganizationUserViewSet(viewsets.ViewSet):
+    def retrieve(self, request, organizations_pk=None, pk=None):
         """
         Let's get this working now!
         ---
         parameter_strategy: replace
         parameters:
-            - name: firstvars_pk
-              description: "The key to firstvars"
+            - name: organizations_pk
+              description: "The organization ID (primary key)"
               required: true
               paramType: path
             - name: pk
-              description: "The key for this one"
+              description: "The user ID (primary key)"
               required: true
               paramType: path
         """
-        return HttpResponse("Made it into the second level, with firstvars_pk = " + str(firstvars_pk) + "; and pk = " + str(pk))
+        return HttpResponse("Made it into the second level, with organizations_pk = " + str(organizations_pk) + "; and pk = " + str(pk))
 
 
 class DatasetViewSet(LoginRequiredMixin, viewsets.ViewSet):
