@@ -30,19 +30,19 @@ from seed.views.main import (
     delete_buildings, delete_organization
 )
 
-from seed.views.datasets import DatasetViewSet, NestedOrganizationsBaseViewSet, NestedOrganizationUserViewSet
-from seed.views.organizations import OrganizationViewSet
+from seed.views.datasets import DatasetViewSet
+from seed.views.organizations import OrganizationViewSet, NestedOrganizationUserViewSet
 from rest_framework import routers
 from rest_framework_nested import routers as nested_routers
 
 nested_router_a = nested_routers.SimpleRouter()
-nested_router_a.register(r'organizations', NestedOrganizationsBaseViewSet, base_name="organizations")
+nested_router_a.register(r'organizations', OrganizationViewSet, base_name="organizations")
 nested_router_b = nested_routers.NestedSimpleRouter(nested_router_a, r'organizations', lookup='organizations')
 nested_router_b.register(r'users', NestedOrganizationUserViewSet, base_name="users")
 
 api_v2_router = routers.DefaultRouter()
 api_v2_router.register(r'datasets', DatasetViewSet, base_name="datasets")
-api_v2_router.register(r'organizations', OrganizationViewSet, base_name="organizations")
+# api_v2_router.register(r'organizations', OrganizationViewSet, base_name="organizations")
 
 # prefix, to revert back to original endpoints, leave this blank
 apiv1 = r''  # r'api/v1/'
@@ -216,7 +216,7 @@ urlpatterns = [
     url(r'^api/v2/', include(api_v2_router.urls), name='apiv2'),
 
     # test nested
-    url(r'^', include(nested_router_a.urls), name='nested_a'),
-    url(r'^', include(nested_router_b.urls), name='nested_b'),
+    url(r'^api/v2/', include(nested_router_a.urls), name='nested_a'),
+    url(r'^api/v2/', include(nested_router_b.urls), name='nested_b'),
 
 ]

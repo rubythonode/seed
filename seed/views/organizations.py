@@ -151,6 +151,152 @@ def _get_severity_from_js(severity):
 _log = logging.getLogger(__name__)
 
 
+
+
+
+class NestedOrganizationUserViewSet(viewsets.ViewSet):
+    def retrieve(self, request, organizations_pk=None, pk=None):
+        """
+        Let's get this working now!
+        ---
+        parameter_strategy: replace
+        parameters:
+            - name: organizations_pk
+              description: "The organization ID (primary key)"
+              required: true
+              paramType: path
+            - name: pk
+              description: "The user ID (primary key)"
+              required: true
+              paramType: path
+        """
+        return HttpResponse("Made it into the second level RETRIEVE, with organizations_pk = " + str(organizations_pk) + "; and pk = " + str(pk))
+
+    def destroy(self, request, organizations_pk=None, pk=None):
+        """
+        Removes a user from an organization.
+        ---
+        type:
+            status:
+                required: true
+                type: string
+                description: either success or error
+            message:
+                type: string
+                description: error message, if any
+        parameter_strategy: replace
+        parameters:
+            - name: organizations_pk
+              description: "The organization ID (primary key)"
+              required: true
+              paramType: path
+            - name: pk
+              description: "The user ID (primary key)"
+              required: true
+              paramType: path
+        """
+        body = request.data  # json.loads(request.body)
+        if organizations_pk is None:
+            return HttpResponse(json.dumps({
+                'status': 'error',
+                'message': 'missing the organization_id'
+            }))
+        try:
+            org = Organization.objects.get(pk=organizations_pk)
+        except Organization.DoesNotExist:
+            return HttpResponse(json.dumps({
+                'status': 'error',
+                'message': 'organization does not exist'
+            }))
+        if pk is None:
+            return HttpResponse(json.dumps({
+                'status': 'error',
+                'message': 'missing the user_id'
+            }))
+        try:
+            user = User.objects.get(pk=pk)
+        except User.DoesNotExist:
+            return HttpResponse(json.dumps({
+                'status': 'error',
+                'message': 'user does not exist'
+            }))
+
+        if not OrganizationUser.objects.filter(
+                user=request.user, organization=org, role_level=ROLE_OWNER
+        ).exists():
+            return HttpResponse(json.dumps({
+                'status': 'error',
+                'message': 'only the organization owner can remove a member'
+            }))
+
+        is_last_member = not OrganizationUser.objects.filter(
+            organization=org,
+        ).exclude(user=user).exists()
+
+        if is_last_member:
+            return HttpResponse(json.dumps({
+                'status': 'error',
+                'message': 'an organization must have at least one member'
+            }))
+
+        is_last_owner = not OrganizationUser.objects.filter(
+            organization=org,
+            role_level=ROLE_OWNER,
+        ).exclude(user=user).exists()
+
+        if is_last_owner:
+            return HttpResponse(json.dumps({
+                'status': 'error',
+                'message': 'an organization must have at least one owner level member'
+            }))
+
+        ou = OrganizationUser.objects.get(user=user, organization=org)
+        ou.delete()
+
+        return HttpResponse(json.dumps({'status': 'success'}))
+
+    def list(self, request, organizations_pk=None):
+        """
+        Retrieve all users belonging to an org.
+        returns: {'status': 'success',
+         'users': [
+            {
+             'first_name': the user's first name,
+             'last_name': the user's last name,
+             'email': the user's email address,
+             'id': the user's identifier (int),
+             'role': the user's role ('owner', 'member', 'viewer')
+            }
+          ]
+        }
+        ---
+        parameter_strategy: replace
+        parameters:
+            - name: organizations_pk
+              description: "The organization ID (primary key)"
+              required: true
+              paramType: path
+        """
+        body = request.data
+        try:
+            org = Organization.objects.get(pk=organizations_pk)
+        except Exception as e:
+            return HttpResponse("Could not get organization with pk=" + str(organizations_pk))
+
+        users = []
+        for u in org.organizationuser_set.all():
+            user = u.user
+            users.append({
+                'email': user.email,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+                'user_id': user.pk,
+                'role': _get_js_role(u.role_level)
+            })
+
+        return HttpResponse(json.dumps({'status': 'success', 'users': users}))
+
+
 class OrganizationViewSet(LoginRequiredMixin, viewsets.ViewSet):
 
     @api_endpoint_class

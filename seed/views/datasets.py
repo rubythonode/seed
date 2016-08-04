@@ -16,46 +16,17 @@ from rest_framework import viewsets
 from seed.data_importer.models import ImportRecord
 from seed.decorators import ajax_request_class, require_organization_id_class
 from seed.lib.superperms.orgs.decorators import has_perm_class
-from seed.lib.superperms.orgs.models import Organization
 from seed.models import BuildingSnapshot
 from seed.utils.api import api_endpoint_class
 from seed.utils.time import convert_to_js_timestamp
+from seed.landing.models import SEEDUser as User
+from seed.lib.superperms.orgs.models import (
+    ROLE_OWNER,
+    Organization,
+    OrganizationUser,
+)
 
 _log = logging.getLogger(__name__)
-
-
-class NestedOrganizationsBaseViewSet(viewsets.ViewSet):
-    def retrieve(self, request, pk=None):
-        """
-        Let's get this working now!
-        ---
-        parameter_strategy: replace
-        parameters:
-            - name: pk
-              description: "The organization ID (primary key)"
-              required: true
-              paramType: path
-        """
-        return HttpResponse("Made it into the first level, with pk = " + str(pk))
-
-
-class NestedOrganizationUserViewSet(viewsets.ViewSet):
-    def retrieve(self, request, organizations_pk=None, pk=None):
-        """
-        Let's get this working now!
-        ---
-        parameter_strategy: replace
-        parameters:
-            - name: organizations_pk
-              description: "The organization ID (primary key)"
-              required: true
-              paramType: path
-            - name: pk
-              description: "The user ID (primary key)"
-              required: true
-              paramType: path
-        """
-        return HttpResponse("Made it into the second level, with organizations_pk = " + str(organizations_pk) + "; and pk = " + str(pk))
 
 
 class DatasetViewSet(LoginRequiredMixin, viewsets.ViewSet):
