@@ -151,9 +151,6 @@ def _get_severity_from_js(severity):
 _log = logging.getLogger(__name__)
 
 
-
-
-
 class NestedOrganizationUserViewSet(viewsets.ViewSet):
     def retrieve(self, request, organizations_pk=None, pk=None):
         """
