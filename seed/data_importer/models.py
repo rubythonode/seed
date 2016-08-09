@@ -222,6 +222,7 @@ class ImportRecord(NotDeletableModel):
             total = 0
             for f in self.files:
                 total += f.num_failed_tablecolumnmappings
+
             self._num_failed_tablecolumnmappings = total
         return self._num_failed_tablecolumnmappings
 
@@ -231,7 +232,6 @@ class ImportRecord(NotDeletableModel):
             total = 0
             for f in self.files:
                 total += f.num_coercion_errors
-
             self._num_failed_num_coercion_errors = total
         return self._num_failed_num_coercion_errors
 
@@ -998,8 +998,9 @@ class ImportFile(NotDeletableModel, TimeStampedModel):
 
     @property
     def export_ready(self):
-        return get_cache_state(self.EXPORT_READY_CACHE_KEY,
-                               True) and self.export_file is not None and self.export_file != ""
+        return get_cache_state(
+            self.EXPORT_READY_CACHE_KEY, True
+        ) and self.export_file is not None and self.export_file != ""
 
     @property
     def export_generation_pct_complete(self):
@@ -1149,7 +1150,10 @@ class TableColumnMapping(models.Model):
     @property
     def is_mapped(self):
         return self.ignored or (
-            self.destination_field is not None and self.destination_model is not None and self.destination_field != "" and self.destination_model != "")
+            self.destination_field is not None
+            and self.destination_model is not None
+            and self.destination_field != "" and self.destination_model != ""
+        )
 
 
 class DataCoercionMapping(models.Model):
@@ -1225,7 +1229,9 @@ class BuildingImportRecord(models.Model):
 
 def queue_update_status_for_import_record(pk):
     """edited by AKL to trim down data_importer"""
-    # if not cache.get(ImportRecord.SUMMARY_ANALYSIS_ACTIVE_KEY(pk), False) and not cache.get(ImportRecord.SUMMARY_ANALYSIS_QUEUED_KEY(pk), False) and not "test" in sys.argv:
+    # if not cache.get(ImportRecord.SUMMARY_ANALYSIS_ACTIVE_KEY(pk), False)\
+    # and not cache.get(ImportRecord.SUMMARY_ANALYSIS_QUEUED_KEY(pk), False)\
+    # and not "test" in sys.argv:
     return None
 
 

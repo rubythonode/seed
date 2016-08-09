@@ -4,15 +4,22 @@
 :copyright (c) 2014 - 2016, The Regents of the University of California, through Lawrence Berkeley National Laboratory (subject to receipt of any required approvals from the U.S. Department of Energy) and contributors. All rights reserved.  # NOQA
 :author
 """
-from datetime import datetime
+import datetime
+import json
 
-from django.test import TestCase
+import mock
+
+from django.test import TestCase, TransactionTestCase
 from seed.lib.superperms.orgs.models import Organization, OrganizationUser
-from seed.data_importer.models import ImportFile, ImportRecord
+from seed.data_importer.models import (
+    BuildingImportRecord, DataCoercionMapping, ImportFile, ImportRecord,
+    TableColumnMapping
+)
 from seed.landing.models import SEEDUser as User
 from seed import models as seed_models
 from seed.mappings import mapper
 from seed.tests import util
+from seed.test_helpers.fake import mock_file_factory
 
 
 class TestBuildingSnapshot(TestCase):
@@ -98,7 +105,7 @@ class TestBuildingSnapshot(TestCase):
         bs_model.release_date = date_str
         bs_model.generation_date = date_str
 
-        expected_value = datetime(
+        expected_value = datetime.datetime(
             year=2013, month=12, day=31
         )
 
@@ -120,7 +127,7 @@ class TestBuildingSnapshot(TestCase):
         bs1 = seed_models.BuildingSnapshot()
         bs1.save()
 
-        bs1.year_ending = datetime.utcnow()
+        bs1.year_ending = datetime.datetime.utcnow()
         bs1.year_ending_source = bs1
         bs1.property_name = 'Test 1234'
         bs1.property_name_source = bs1
@@ -698,3 +705,1060 @@ class TestColumnMapping(TestCase):
     def test_is_concatenated(self):
         self.assertEqual(self.directMapping.is_concatenated(), False)
         self.assertEqual(self.concatenatedMapping.is_concatenated(), True)
+
+
+class TestImportRecord(TestCase):
+    """Test ImportRecord methods and properties"""
+    def setUp(self):
+        self.import_record = ImportRecord.objects.create()
+
+    def tearDown(self):
+        ImportFile.objects.all().delete()
+        BuildingImportRecord.objects.all().delete()
+        self.import_record.delete()
+
+    def test_num_files(self):
+        f1 = mock_file_factory('file1.csv')
+        f2 = mock_file_factory('file2.csv')
+        f3 = mock_file_factory('file3.csv')
+        ImportFile.objects.create(import_record=self.import_record, file=f1)
+        ImportFile.objects.create(import_record=self.import_record, file=f2)
+        ImportFile.objects.create(import_record=self.import_record, file=f3)
+        self.assertEqual(self.import_record.num_files, 3)
+
+    # test fails - method refers to non existent key initial_mapping_done
+    def test_num_files_mapped(self):
+        f1 = mock_file_factory('file1.csv')
+        f2 = mock_file_factory('file2.csv')
+        f3 = mock_file_factory('file3.csv')
+        ImportFile.objects.create(import_record=self.import_record, file=f1)
+        ImportFile.objects.create(import_record=self.import_record, file=f2)
+        ImportFile.objects.create(import_record=self.import_record, file=f3)
+        self.assertEqual(self.import_record.num_files_mapped, 3)
+
+    # test fails - method refers to non existent key initial_mapping_done
+    def test_num_files_to_map(self):
+        f1 = mock_file_factory('file1.csv')
+        f2 = mock_file_factory('file2.csv')
+        f3 = mock_file_factory('file3.csv')
+        ImportFile.objects.create(import_record=self.import_record, file=f1)
+        ImportFile.objects.create(import_record=self.import_record, file=f2)
+        ImportFile.objects.create(import_record=self.import_record, file=f3)
+        self.assertEqual(self.import_record.num_files_to_map, 3)
+
+    # test fails - method refers to non existent key initial_mapping_done
+    def test_percent_files_mapped(self):
+        f1 = mock_file_factory('file1.csv')
+        f2 = mock_file_factory('file2.csv')
+        f3 = mock_file_factory('file3.csv')
+        ImportFile.objects.create(import_record=self.import_record, file=f1)
+        ImportFile.objects.create(import_record=self.import_record, file=f2)
+        ImportFile.objects.create(import_record=self.import_record, file=f3)
+        self.assertEqual(self.import_record.percent_files_mapped, 100)
+
+    # test fails - method refers to non existent key coercion_mapping_done
+    def test_num_files_cleaned(self):
+        f1 = mock_file_factory('file1.csv')
+        f2 = mock_file_factory('file2.csv')
+        f3 = mock_file_factory('file3.csv')
+        ImportFile.objects.create(import_record=self.import_record, file=f1)
+        ImportFile.objects.create(import_record=self.import_record, file=f2)
+        ImportFile.objects.create(import_record=self.import_record, file=f3)
+        self.assertEqual(self.import_record.num_files_cleaned, 3)
+
+    # test fails - method refers to non existent key coercion_mapping_done
+    def test_num_files_to_clean(self):
+        f1 = mock_file_factory('file1.csv')
+        f2 = mock_file_factory('file2.csv')
+        f3 = mock_file_factory('file3.csv')
+        ImportFile.objects.create(import_record=self.import_record, file=f1)
+        ImportFile.objects.create(import_record=self.import_record, file=f2)
+        ImportFile.objects.create(import_record=self.import_record, file=f3)
+        self.assertEqual(self.import_record.num_files_to_clean, 3)
+
+    # test fails - method refers to non existent key coercion_mapping_done
+    def test_percent_files_cleaned(self):
+        f1 = mock_file_factory('file1.csv')
+        f2 = mock_file_factory('file2.csv')
+        f3 = mock_file_factory('file3.csv')
+        ImportFile.objects.create(import_record=self.import_record, file=f1)
+        ImportFile.objects.create(import_record=self.import_record, file=f2)
+        ImportFile.objects.create(import_record=self.import_record, file=f3)
+        self.assertEqual(self.import_record.percent_files_cleaned, 100)
+
+    # passes but unused
+    def test_num_files_merged(self):
+        self.import_record._num_ready_for_import = 0
+        self.assertEqual(self.import_record.num_files_merged, 0)
+
+    # passes but unused
+    def test_num_files_to_merge(self):
+        self.import_record._num_ready_for_import = 0
+        f1 = mock_file_factory('file1.csv')
+        f2 = mock_file_factory('file2.csv')
+        f3 = mock_file_factory('file3.csv')
+        ImportFile.objects.create(import_record=self.import_record, file=f1)
+        ImportFile.objects.create(import_record=self.import_record, file=f2)
+        ImportFile.objects.create(import_record=self.import_record, file=f3)
+        self.assertEqual(self.import_record.num_files_to_merge, 3)
+
+    # passes but unused
+    def test_percent_files_ready_to_merge(self):
+        f1 = mock_file_factory('file1.csv')
+        f2 = mock_file_factory('file2.csv')
+        f3 = mock_file_factory('file3.csv')
+        ImportFile.objects.create(import_record=self.import_record, file=f1)
+        ImportFile.objects.create(import_record=self.import_record, file=f2)
+        ImportFile.objects.create(import_record=self.import_record, file=f3)
+        self.assertEqual(self.import_record.percent_files_ready_to_merge, 100)
+
+    # passes but unused
+    def test_num_ready_for_import(self):
+        f1 = mock_file_factory('file1.csv')
+        f2 = mock_file_factory('file2.csv')
+        f3 = mock_file_factory('file3.csv')
+        ImportFile.objects.create(import_record=self.import_record, file=f1)
+        ImportFile.objects.create(import_record=self.import_record, file=f2)
+        ImportFile.objects.create(import_record=self.import_record, file=f3)
+        self.assertEqual(self.import_record.num_ready_for_import, 3)
+
+    # passes but unused
+    def test_num_not_ready_for_import(self):
+        f1 = mock_file_factory('file1.csv')
+        f2 = mock_file_factory('file2.csv')
+        f3 = mock_file_factory('file3.csv')
+        ImportFile.objects.create(import_record=self.import_record, file=f1)
+        ImportFile.objects.create(import_record=self.import_record, file=f2)
+        ImportFile.objects.create(import_record=self.import_record, file=f3)
+        self.assertEqual(self.import_record.num_not_ready_for_import, 0)
+
+    # passes but unused
+    def test_ready_for_import(self):
+        f1 = mock_file_factory('file1.csv')
+        f2 = mock_file_factory('file2.csv')
+        f3 = mock_file_factory('file3.csv')
+        ImportFile.objects.create(import_record=self.import_record, file=f1)
+        ImportFile.objects.create(import_record=self.import_record, file=f2)
+        ImportFile.objects.create(import_record=self.import_record, file=f3)
+        self.assertTrue(self.import_record.ready_for_import)
+
+    # passes but unused
+    def test_percent_ready_for_import(self):
+        f1 = mock_file_factory('file1.csv')
+        f2 = mock_file_factory('file2.csv')
+        f3 = mock_file_factory('file3.csv')
+        ImportFile.objects.create(
+            import_record=self.import_record, file=f1,
+            num_tasks_total=1, num_tasks_complete=1
+        )
+        ImportFile.objects.create(
+            import_record=self.import_record, file=f2,
+            num_tasks_total=1, num_tasks_complete=1
+        )
+        ImportFile.objects.create(
+            import_record=self.import_record, file=f3,
+            num_tasks_total=1, num_tasks_complete=1
+        )
+        self.assertEqual(self.import_record.percent_ready_for_import, 100)
+
+    # passes but unused
+    def test_percent_ready_for_import_by_file_count(self):
+        f1 = mock_file_factory('file1.csv')
+        f2 = mock_file_factory('file2.csv')
+        f3 = mock_file_factory('file3.csv')
+        ImportFile.objects.create(import_record=self.import_record, file=f1)
+        ImportFile.objects.create(import_record=self.import_record, file=f2)
+        ImportFile.objects.create(import_record=self.import_record, file=f3)
+        self.assertEqual(
+            self.import_record.percent_ready_for_import_by_file_count, 100
+        )
+
+    # passes but unused
+    def test_num_failed_tablecolumnmappings(self):
+        f1 = mock_file_factory('file1.csv')
+        f2 = mock_file_factory('file2.csv')
+        f3 = mock_file_factory('file3.csv')
+        ImportFile.objects.create(import_record=self.import_record, file=f1)
+        ImportFile.objects.create(import_record=self.import_record, file=f2)
+        ImportFile.objects.create(import_record=self.import_record, file=f3)
+        self.assertEqual(self.import_record.num_failed_tablecolumnmappings, 0)
+
+    # passes but unused except in initial migration
+    def test_num_coercion_errors(self):
+        f1 = mock_file_factory('file1.csv')
+        f2 = mock_file_factory('file2.csv')
+        f3 = mock_file_factory('file3.csv')
+        ImportFile.objects.create(import_record=self.import_record, file=f1)
+        ImportFile.objects.create(import_record=self.import_record, file=f2)
+        ImportFile.objects.create(import_record=self.import_record, file=f3)
+        self.assertEqual(self.import_record.num_coercion_errors, 0)
+
+    # fails as import_file.num_validation_errors may be None
+    # coercion_errors sets default to 1 but not validation error
+    def test_num_validation_errors(self):
+        f1 = mock_file_factory('file1.csv')
+        f2 = mock_file_factory('file2.csv')
+        f3 = mock_file_factory('file3.csv')
+        ImportFile.objects.create(import_record=self.import_record, file=f1)
+        ImportFile.objects.create(import_record=self.import_record, file=f2)
+        ImportFile.objects.create(import_record=self.import_record, file=f3)
+        self.assertEqual(self.import_record.num_validation_errors, 0)
+        f4 = mock_file_factory('file4.csv')
+        ImportFile.objects.create(
+            import_record=self.import_record, file=f4, num_validation_errors=1
+        )
+        self.assertEqual(self.import_record.num_validation_errors, 1)
+
+    # fails as import_file.num_rows may be None, appears unused
+    def test_num_rows(self):
+        f1 = mock_file_factory('file1.csv')
+        f2 = mock_file_factory('file2.csv')
+        f3 = mock_file_factory('file3.csv')
+        ImportFile.objects.create(import_record=self.import_record, file=f1)
+        ImportFile.objects.create(import_record=self.import_record, file=f2)
+        ImportFile.objects.create(import_record=self.import_record, file=f3)
+        f1 = mock_file_factory('file1.csv')
+        self.assertEqual(self.import_record.num_rows, 0)
+
+    def test_num_rows_import_file_has_num_rows(self):
+        f1 = mock_file_factory('file1.csv')
+        ImportFile.objects.create(
+            import_record=self.import_record, file=f1, num_rows=1
+        )
+        self.assertEqual(self.import_record.num_rows, 1)
+
+    # fails as import_file.num_columns may be None, appears unused
+    def test_num_columns(self):
+        f1 = mock_file_factory('file1.csv')
+        f2 = mock_file_factory('file2.csv')
+        f3 = mock_file_factory('file3.csv')
+        ImportFile.objects.create(import_record=self.import_record, file=f1)
+        ImportFile.objects.create(import_record=self.import_record, file=f2)
+        ImportFile.objects.create(import_record=self.import_record, file=f3)
+        self.assertEqual(self.import_record.num_columns, 0)
+
+    def test_num_columns_import_file_has_num_columns(self):
+        f1 = mock_file_factory('file1.csv')
+        ImportFile.objects.create(
+            import_record=self.import_record, file=f1, num_columns=1
+        )
+        self.assertEqual(self.import_record.num_columns, 1)
+
+    # fails as import_file.file_size_in_bytes may be None, appears unused
+    def test_total_file_size(self):
+        f1 = mock_file_factory('file1.csv')
+        f2 = mock_file_factory('file2.csv')
+        f3 = mock_file_factory('file3.csv')
+        ImportFile.objects.create(import_record=self.import_record, file=f1)
+        ImportFile.objects.create(import_record=self.import_record, file=f2)
+        ImportFile.objects.create(import_record=self.import_record, file=f3)
+        self.assertEqual(self.import_record.total_file_size, 0)
+
+    def test_total_file_size_import_file_has_file_size(self):
+        f1 = mock_file_factory('file1.csv')
+        ImportFile.objects.create(
+            import_record=self.import_record, file=f1, file_size_in_bytes=1000
+        )
+        self.assertEqual(self.import_record.total_file_size, 1000)
+
+    # fails as import_file.num_validation_errors etc may be None, appears unused
+    def test_total_correct_mappings(self):
+        f1 = mock_file_factory('file1.csv')
+        f2 = mock_file_factory('file2.csv')
+        f3 = mock_file_factory('file3.csv')
+        ImportFile.objects.create(import_record=self.import_record, file=f1)
+        ImportFile.objects.create(import_record=self.import_record, file=f2)
+        ImportFile.objects.create(import_record=self.import_record, file=f3)
+        self.assertEqual(self.import_record.total_correct_mappings, 0)
+
+    def test_total_correct_mappings_ready_for_import_is_100(self):
+        self.import_record._percent_ready_for_import = 100
+        self.assertEqual(self.import_record.total_correct_mappings, 100)
+
+    def test_total_correct_mappings_attributes_set(self):
+        f1 = mock_file_factory('file1.csv')
+        f2 = mock_file_factory('file2.csv')
+        f3 = mock_file_factory('file3.csv')
+        ImportFile.objects.create(
+            import_record=self.import_record, file=f1,
+            num_validation_errors=1, num_coercion_errors=0,
+        )
+        ImportFile.objects.create(
+            import_record=self.import_record, file=f2,
+            num_validation_errors=0, num_coercion_errors=1,
+        )
+        ifl = ImportFile.objects.create(
+            import_record=self.import_record, file=f3,
+            num_validation_errors=0, num_coercion_errors=0,
+        )
+        TableColumnMapping.objects.create(source_string='test', import_file=ifl)
+        self.import_record._percent_ready_for_import = 0
+        self.assertEqual(self.import_record.total_correct_mappings, 3)
+
+    # appears unused except internally by pct_merge_complete
+    def test_merge_progress_key(self):
+        self.assertEqual(
+            self.import_record.merge_progress_key,
+            "merge_progress_pct_" + str(self.import_record.pk)
+        )
+
+    # appears unused
+    def test_match_progress_key(self):
+        self.assertEqual(
+            self.import_record.match_progress_key,
+            "match_progress_pct_" + str(self.import_record.pk)
+        )
+
+    # appears unused
+    def test_merge_status_key(self):
+        self.assertEqual(
+            self.import_record.merge_status_key,
+            "merge_import_record_status_" + str(self.import_record.pk)
+        )
+
+    # appears unused
+    @mock.patch('seed.data_importer.models.get_cache')
+    def test_pct_merge_complete(self, mock_get_cache):
+        mock_get_cache.return_value = {'progress': 100}
+        self.assertEqual(
+            self.import_record.pct_merge_complete,
+            100
+        )
+        mock_get_cache.assert_called_with(
+            "merge_progress_pct_" + str(self.import_record.pk)
+        )
+
+    # appears unused
+    def test_premerge_seconds_remaining_key(self):
+        self.assertEqual(
+            self.import_record.premerge_seconds_remaining_key,
+            "premerge_seconds_remaining_" + str(self.import_record.pk)
+        )
+
+    # appears unused
+    def test_MAPPING_ACTIVE_KEY(self):
+        self.assertEqual(
+            self.import_record.MAPPING_ACTIVE_KEY,
+            "IR_MAPPING_ACTIVE" + str(self.import_record.pk)
+        )
+
+    # appears unused
+    def test_MAPPING_QUEUED_KEY(self):
+        self.assertEqual(
+            self.import_record.MAPPING_QUEUED_KEY,
+            "IR_MAPPING_QUEUED" + str(self.import_record.pk)
+        )
+
+    # appears unused
+    @mock.patch('seed.data_importer.models.get_cache_raw')
+    def test_estimated_seconds_remaining(self, mock_get_cache_raw):
+        mock_get_cache_raw.return_value = 100
+        self.assertEqual(
+            self.import_record.estimated_seconds_remaining,
+            100
+        )
+        mock_get_cache_raw.assert_called_with(
+            "merge_seconds_remaining_" + str(self.import_record.pk)
+        )
+
+    # appears unused
+    @mock.patch('seed.data_importer.models.get_cache')
+    def test_merge_status(self, mock_get_cache):
+        mock_get_cache.return_value = {'status': 'test'}
+        self.assertEqual(
+            self.import_record.merge_status,
+            'test'
+        )
+        mock_get_cache.assert_called_with(
+            "merge_import_record_status_" + str(self.import_record.pk)
+        )
+
+    # appears unused
+    @mock.patch('seed.data_importer.models.get_cache_raw')
+    def test_estimated_premerge_seconds_remaining(self, mock_get_cache_raw):
+        mock_get_cache_raw.return_value = 100
+        self.assertEqual(
+            self.import_record.premerge_estimated_seconds_remaining,
+            100
+        )
+        mock_get_cache_raw.assert_called_with(
+            "premerge_seconds_remaining_" + str(self.import_record.pk)
+        )
+
+    def test_matched_buildings(self):
+        bir = BuildingImportRecord.objects.create(
+            import_record=self.import_record,
+            was_in_database=True
+        )
+        result = self.import_record.matched_buildings
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0].pk, bir.pk)
+
+    def test_num_matched_buildings(self):
+        BuildingImportRecord.objects.create(
+            import_record=self.import_record,
+            was_in_database=True
+        )
+        result = self.import_record.num_matched_buildings
+        self.assertEqual(result, 1)
+
+    def test_new_buildings(self):
+        bir = BuildingImportRecord.objects.create(
+            import_record=self.import_record,
+            was_in_database=False,
+            is_missing_from_import=False
+        )
+        result = self.import_record.new_buildings
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0].pk, bir.pk)
+
+    def test_num_new_buildings(self):
+        BuildingImportRecord.objects.create(
+            import_record=self.import_record,
+            was_in_database=False,
+            is_missing_from_import=False
+        )
+        result = self.import_record.num_new_buildings
+        self.assertEqual(result, 1)
+
+    def test_missing_buildings(self):
+        bir = BuildingImportRecord.objects.create(
+            import_record=self.import_record,
+            is_missing_from_import=True
+        )
+        result = self.import_record.missing_buildings
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0].pk, bir.pk)
+
+    def test_num_missing_buildings(self):
+        BuildingImportRecord.objects.create(
+            import_record=self.import_record,
+            is_missing_from_import=True
+        )
+        result = self.import_record.num_missing_buildings
+        self.assertEqual(result, 1)
+
+    def test_num_buildings_imported_total(self):
+        BuildingImportRecord.objects.create(
+            import_record=self.import_record,
+            was_in_database=True
+        )
+        BuildingImportRecord.objects.create(
+            import_record=self.import_record,
+            was_in_database=False,
+            is_missing_from_import=False
+        )
+        BuildingImportRecord.objects.create(
+            import_record=self.import_record,
+            is_missing_from_import=True
+        )
+        result = self.import_record.num_buildings_imported_total
+        self.assertEqual(result, 3)
+
+    # Fails: references non-existant key (coercion_mapping_done) on ImportFile
+    def test_status_percent_STATUS_MACHINE_CLEANING(self):
+        self.import_record.status = 3
+        self.import_record.save()
+        f1 = mock_file_factory('file1.csv')
+        f2 = mock_file_factory('file2.csv')
+        f3 = mock_file_factory('file3.csv')
+        ImportFile.objects.create(
+            import_record=self.import_record, file=f1, num_columns=1, num_rows=1
+        )
+        ImportFile.objects.create(
+            import_record=self.import_record, file=f2, num_columns=1, num_rows=1
+        )
+        ImportFile.objects.create(
+            import_record=self.import_record, file=f3, num_columns=1, num_rows=1
+        )
+        self.assertEqual(self.import_record.status_percent, 100.0)
+
+    # Fails: references non-existant key (coercion_mapping_done) on ImportFile
+    def test_status_percent_STATUS_CLEANING(self):
+        self.import_record.status = 4
+        self.import_record.save()
+        f1 = mock_file_factory('file1.csv')
+        f2 = mock_file_factory('file2.csv')
+        f3 = mock_file_factory('file3.csv')
+        ImportFile.objects.create(
+            import_record=self.import_record, file=f1, num_columns=1, num_rows=1
+        )
+        ImportFile.objects.create(
+            import_record=self.import_record, file=f2, num_columns=1, num_rows=1
+        )
+        ImportFile.objects.create(
+            import_record=self.import_record, file=f3, num_columns=1, num_rows=1
+        )
+        self.assertEqual(self.import_record.status_percent, 100.0)
+
+    # Fails: references non-existant key (coercion_mapping_done) on ImportFile
+    def test_status_percent_STATUS_MAPPING(self):
+        self.import_record.status = 4
+        self.import_record.save()
+        f1 = mock_file_factory('file1.csv')
+        f2 = mock_file_factory('file2.csv')
+        f3 = mock_file_factory('file3.csv')
+        ImportFile.objects.create(
+            import_record=self.import_record, file=f1, num_columns=1, num_rows=1
+        )
+        ImportFile.objects.create(
+            import_record=self.import_record, file=f2, num_columns=1, num_rows=1
+        )
+        ImportFile.objects.create(
+            import_record=self.import_record, file=f3, num_columns=1, num_rows=1
+        )
+        self.assertEqual(self.import_record.status_percent, 100.0)
+
+    @mock.patch('seed.data_importer.models.get_cache')
+    def test_status_percent_premerge_analysis_active(self, mock_get_cache):
+        mock_get_cache.return_value = {'progress': 70.0}
+        self.import_record.premerge_analysis_active = True
+        self.import_record.save()
+        f1 = mock_file_factory('file1.csv')
+        f2 = mock_file_factory('file2.csv')
+        f3 = mock_file_factory('file3.csv')
+        ImportFile.objects.create(
+            import_record=self.import_record, file=f1, num_columns=1, num_rows=1
+        )
+        ImportFile.objects.create(
+            import_record=self.import_record, file=f2, num_columns=1, num_rows=1
+        )
+        ImportFile.objects.create(
+            import_record=self.import_record, file=f3, num_columns=1, num_rows=1
+        )
+        self.assertEqual(self.import_record.status_percent, 70.0)
+
+    @mock.patch('seed.data_importer.models.get_cache')
+    def test_status_percent_merge_analysis_active(self, mock_get_cache):
+        mock_get_cache.return_value = {'progress': 70.0}
+        self.import_record.merge_analysis_active = True
+        self.import_record.save()
+        f1 = mock_file_factory('file1.csv')
+        f2 = mock_file_factory('file2.csv')
+        f3 = mock_file_factory('file3.csv')
+        ImportFile.objects.create(
+            import_record=self.import_record, file=f1, num_columns=1, num_rows=1
+        )
+        ImportFile.objects.create(
+            import_record=self.import_record, file=f2, num_columns=1, num_rows=1
+        )
+        ImportFile.objects.create(
+            import_record=self.import_record, file=f3, num_columns=1, num_rows=1
+        )
+        self.assertEqual(self.import_record.status_percent, 70.0)
+
+    def test_status_percent_is_imported_live(self):
+        self.import_record.is_imported_live = True
+        self.import_record.save()
+        f1 = mock_file_factory('file1.csv')
+        f2 = mock_file_factory('file2.csv')
+        f3 = mock_file_factory('file3.csv')
+        ImportFile.objects.create(
+            import_record=self.import_record, file=f1, num_columns=1, num_rows=1
+        )
+        ImportFile.objects.create(
+            import_record=self.import_record, file=f2, num_columns=1, num_rows=1
+        )
+        ImportFile.objects.create(
+            import_record=self.import_record, file=f3, num_columns=1, num_rows=1
+        )
+        self.assertEqual(self.import_record.status_percent, 100.0)
+
+    # test fails - reference to non existent key coercion_mapping_done on ImportFile
+    def test_status_numerator_STATUS_CLEANING(self):
+        self.import_record.status = 4
+        self.import_record.save()
+        f1 = mock_file_factory('file1.csv')
+        f2 = mock_file_factory('file2.csv')
+        f3 = mock_file_factory('file3.csv')
+        ImportFile.objects.create(import_record=self.import_record, file=f1)
+        ImportFile.objects.create(import_record=self.import_record, file=f2)
+        ImportFile.objects.create(import_record=self.import_record, file=f3)
+        self.assertEqual(self.import_record.status_numerator, 3)
+
+    # test fails - reference to non existent key coercion_mapping_done on ImportFile
+    def test_status_numerator_STATUS_MAPPING(self):
+        self.import_record.status = 2
+        self.import_record.save()
+        f1 = mock_file_factory('file1.csv')
+        f2 = mock_file_factory('file2.csv')
+        f3 = mock_file_factory('file3.csv')
+        ImportFile.objects.create(import_record=self.import_record, file=f1)
+        ImportFile.objects.create(import_record=self.import_record, file=f2)
+        ImportFile.objects.create(import_record=self.import_record, file=f3)
+        self.assertEqual(self.import_record.status_numerator, 3)
+
+    # only refered to in broken methods
+    def test_status_denominator(self):
+        f1 = mock_file_factory('file1.csv')
+        f2 = mock_file_factory('file2.csv')
+        f3 = mock_file_factory('file3.csv')
+        ImportFile.objects.create(import_record=self.import_record, file=f1)
+        ImportFile.objects.create(import_record=self.import_record, file=f2)
+        ImportFile.objects.create(import_record=self.import_record, file=f3)
+        self.assertEqual(self.import_record.status_denominator, 3)
+
+    def test_urls(self):
+        # not required? is bpd still a thing?
+        self.assertEqual(self.import_record.app_namespace, 'seed')
+        # don't work, no reverse
+        # self.import_record.pre_merge_url
+        # self.import_record.worksheet_url
+        # self.import_record.add_files_url
+        # self.import_record.premerge_progress_url
+        # self.import_record.start_merge_url
+        # self.import_record.merge_url
+        # self.import_record.dashboard_url
+        # self.import_record.search_url
+        # self.import_record.delete_url
+        # self.import_record.save_import_meta_url
+
+        # refers to above
+        # self.import_record.status_url
+
+    def test_mark_merged(self):
+        then = datetime.datetime.now()
+        self.import_record.mark_merged()
+        now = datetime.datetime.now()
+        self.assertTrue(self.import_record.merge_analysis_done)
+        self.assertFalse(self.import_record.merge_analysis_active)
+        self.assertTrue(self.import_record.is_imported_live)
+        assert then <= self.import_record.import_completed_at <= now
+
+    def test_mark_merge_started(self):
+        self.import_record.mark_merge_started()
+        self.assertFalse(self.import_record.merge_analysis_done)
+        self.assertTrue(self.import_record.merge_analysis_active)
+        self.assertFalse(self.import_record.merge_analysis_queued)
+
+    # fails with Type Error: can't subtract offset-naive and offset-aware datetimes
+    # references non existent keys
+    def test_to_json(self):
+        updated_at = datetime.datetime.now() - datetime.timedelta(minutes=1)
+        self.import_record.updated_at = updated_at
+        self.import_record.save()
+        assert False
+        # self.import_record.to_json
+
+    # Fails dues to failed reverse etc
+    @mock.patch('seed.data_importer.models.get_cache_state')
+    def test_worksheet_progress_json(self, mock_get_cache_state):
+        mock_get_cache_state.return_value = True
+        self.assertNotEqual(self.import_record.worksheet_progress_json, [])
+
+
+class TestImportFile(TransactionTestCase):
+    """Test ImportRecord methods and properties"""
+
+    def setUp(self):
+        mock_csv_patch = mock.patch(
+            'seed.data_importer.models.csv.reader',
+        )
+        self.addCleanup(mock_csv_patch.stop)
+        self.mock_csv_reader = mock_csv_patch.start()
+        self.mock_csv_reader.return_value = [['a', 'b', 'c'], ['d', 'e', 'f']]
+        self.import_record = ImportRecord.objects.create()
+        self.file = mock_file_factory('file1.csv')
+        self.import_file = ImportFile.objects.create(
+            import_record=self.import_record, file=self.file
+        )
+
+    def tearDown(self):
+        ImportFile.objects.all().delete()
+        ImportRecord.objects.all().delete()
+        TableColumnMapping.objects.all().delete()
+        DataCoercionMapping.objects.all().delete()
+
+    # appears unused
+    def test_data_rows(self):
+        result = [i for i in self.import_file.data_rows]
+        self.assertEqual(result, [['a', 'b', 'c'], ['d', 'e', 'f']])
+
+    # appears unused
+    def test_cleaned_data_rows(self):
+        tcm = TableColumnMapping.objects.create(
+            import_file=self.import_file, source_string='test', order=1
+        )
+        DataCoercionMapping.objects.create(
+            table_column_mapping=tcm, source_string='a', source_type='test',
+            destination_value='x'
+        )
+        result = [i for i in self.import_file.cleaned_data_rows]
+        # note removes columns with no tablecolumnmapping
+        self.assertEqual(result, [['x'], ['d']])
+
+    # unused, contains faulty assumptions according to seed/tasks.py L 705
+    def test_cache_first_rows(self):
+        self.import_file.cache_first_rows()
+        self.assertEqual(self.import_file.cached_first_row, 'a|#*#|b|#*#|c')
+        self.assertEqual(
+            self.import_file.cached_second_to_fifth_row, 'd|#*#|e|#*#|f\n'
+        )
+        self.assertEqual(self.import_file.num_rows, 1)
+        self.assertEqual(self.import_file.num_columns, 3)
+
+    # appears unused
+    # only works if cache_first_rows() is called first, but does not check
+    def test_second_to_fifth_rows(self):
+        self.import_file.cache_first_rows()
+        self.assertEqual(
+            self.import_file.second_to_fifth_rows, [['d', 'e', 'f']]
+        )
+
+    # only used in broken method
+    def test_num_mapping_total(self):
+        self.assertEqual(self.import_file.num_mapping_total, 0)
+        TableColumnMapping.objects.create(
+            import_file=self.import_file, source_string='test', order=1
+        )
+        self.assertEqual(self.import_file.num_mapping_total, 1)
+
+    # appears unused
+    def test_num_mapping_remaining(self):
+        # method contains useless use of ||
+        self.assertEqual(self.import_file.num_mapping_errors, 0)
+        self.assertEqual(self.import_file.num_mapping_remaining, 0)
+
+    # appears unused
+    def test_num_mapping_complete(self):
+        # method contains useless use of ||
+        self.assertEqual(self.import_file.num_mapping_complete, 0)
+        TableColumnMapping.objects.create(
+            import_file=self.import_file, source_string='test', order=1
+        )
+        self.assertEqual(self.import_file.num_mapping_complete, 1)
+
+    # appears unused
+    def test_num_cleaning_complete(self):
+        self.assertEqual(self.import_file.num_cleaning_complete, 0)
+
+    # appears unused
+    # only works if cache_first_rows() is called first, but does not check
+    def test_num_cells(self):
+        self.import_file.cache_first_rows()
+        self.assertEqual(self.import_file.num_cells, 3)
+
+    # appears unused
+    # only works if cache_first_rows() is called first, but does not check
+    def test_tcm_json(self):
+        TableColumnMapping.objects.create(
+            import_file=self.import_file, source_string='test', order=1
+        )
+        self.import_file.cache_first_rows()
+        results = json.loads(self.import_file.tcm_json)
+        self.assertEqual(results[0]["header_row"], 'a')
+        self.assertEqual(results[0]["order"], 1)
+
+    # appears unused
+    def test_tcm_errors_json(self):
+        self.assertEqual(self.import_file.tcm_json, '[]')
+        # only works if cache_first_rows() is called first, but does not check
+        TableColumnMapping.objects.create(
+            import_file=self.import_file, source_string='test', order=1,
+            error_message_text='test\n'
+        )
+        self.import_file.cache_first_rows()
+        results = json.loads(self.import_file.tcm_errors_json)
+        self.assertEqual(results[0]["order"], 1)
+        self.assertEqual(results[0]["error_message_text"], '')
+        TableColumnMapping.objects.create(
+            import_file=self.import_file, source_string='test', order=2,
+            error_message_text='test\n', destination_model='test',
+            destination_field='test'
+        )
+        results = json.loads(self.import_file.tcm_errors_json)
+        self.assertEqual(results[1]["order"], 2)
+        self.assertEqual(results[1]["error_message_text"], 'test<br/>')
+
+    # appears unused
+    @mock.patch('seed.data_importer.models.delete_cache')
+    @mock.patch('seed.data_importer.models.set_cache_state')
+    @mock.patch('seed.data_importer.models.get_cache_state')
+    @mock.patch('seed.data_importer.models.get_cache_raw')
+    def test_update_tcms_from_save(self, mock_get_cache_raw, mock_get_cache_state,
+                                   mock_set_cache_state, mock_delete_cache):
+        mock_get_cache_raw.side_effect = [1, True, '{}', 2, None, False]
+        mock_get_cache_state.side_effect = [False, False]
+
+        tcm = TableColumnMapping.objects.create(
+            import_file=self.import_file, source_string='test', order=1
+        )
+        self.assertFalse(tcm.was_a_human_decision)
+
+        queued_tcm_save = "QUEUED_TCM_SAVE_{}".format(tcm.pk)
+        queued_tcm_data_key = "QUEUED_TCM_DATA_KEY{}".format(tcm.pk)
+        updating_tcms_key = "UPDATING_TCMS_KEY{}".format(tcm.pk)
+
+        json_data = json.dumps(
+            [{'pk': tcm.pk, 'destination_model': 'test',
+             'destination_field': 'test', 'ignored': False}]
+        )
+
+        result = self.import_file.update_tcms_from_save(json_data, 2)
+        tcm = TableColumnMapping.objects.get(pk=tcm.pk)
+
+        self.assertTrue(result)
+        self.assertTrue(tcm.was_a_human_decision)
+
+        self.assertEqual(
+            mock_get_cache_raw.call_args_list,
+            [
+                mock.call(queued_tcm_save, None),
+                mock.call(queued_tcm_save, False),
+                mock.call(queued_tcm_data_key),
+                mock.call(queued_tcm_save),
+                mock.call(queued_tcm_save, None),
+                mock.call(queued_tcm_save, False),
+            ]
+        )
+
+        self.assertEqual(
+            mock_get_cache_state.call_args_list,
+            [
+                mock.call(updating_tcms_key, None),
+                mock.call(updating_tcms_key, None)
+            ]
+        )
+
+        self.assertEqual(
+            mock_set_cache_state.call_args_list,
+            [
+                mock.call(updating_tcms_key, True),
+                mock.call(updating_tcms_key, True)
+            ]
+        )
+
+        self.assertEqual(
+            mock_delete_cache.call_args_list,
+            [
+                mock.call(queued_tcm_data_key),
+                mock.call(queued_tcm_save),
+                mock.call(updating_tcms_key),
+                mock.call(updating_tcms_key),
+                mock.call(queued_tcm_data_key),
+                mock.call(queued_tcm_save),
+                mock.call(updating_tcms_key),
+                mock.call(queued_tcm_data_key),
+                mock.call(queued_tcm_save),
+            ]
+        )
+
+    @mock.patch('seed.data_importer.models.set_cache_raw')
+    @mock.patch('seed.data_importer.models.get_cache_state')
+    @mock.patch('seed.data_importer.models.get_cache_raw')
+    def test_update_tcms_from_save_false(
+            self, mock_get_cache_raw, mock_get_cache_state, mock_set_cache_raw):
+        mock_get_cache_raw.return_value = 1
+        mock_get_cache_state.return_value = True
+
+        tcm = TableColumnMapping.objects.create(
+            import_file=self.import_file, source_string='test', order=1
+        )
+        self.assertFalse(tcm.was_a_human_decision)
+
+        queued_tcm_save = "QUEUED_TCM_SAVE_{}".format(tcm.pk)
+        queued_tcm_data_key = "QUEUED_TCM_DATA_KEY{}".format(tcm.pk)
+        updating_tcms_key = "UPDATING_TCMS_KEY{}".format(tcm.pk)
+
+        json_data = json.dumps(
+            [{'pk': tcm.pk, 'destination_model': 'test',
+             'destination_field': 'test', 'ignored': False}]
+        )
+
+        result = self.import_file.update_tcms_from_save(json_data, 2)
+        tcm = TableColumnMapping.objects.get(pk=tcm.pk)
+
+        self.assertFalse(result)
+        self.assertFalse(tcm.was_a_human_decision)
+        self.assertEqual(
+            mock_get_cache_raw.call_args,
+            mock.call(queued_tcm_save, None)
+        )
+        self.assertEqual(
+            mock_get_cache_state.call_args,
+            mock.call(updating_tcms_key, None)
+        )
+        self.assertEqual(
+            mock_set_cache_raw.call_args_list,
+            [
+                mock.call(queued_tcm_save, 2),
+                mock.call(queued_tcm_data_key, json_data)
+            ]
+        )
+
+    # will fail, references non-existent property  coercion_mapping_done
+    @mock.patch('seed.data_importer.models.get_cache_state')
+    @mock.patch('seed.data_importer.models.get_cache')
+    def test_cleaning_progress_pct(self, mock_get_cache, mock_get_cache_state):
+        mock_get_cache_state.side_effect = (
+            False, False, True, False, False, True, False, False
+        )
+        # not self.coercion_mapping_active and not self.coercion_mapping_queued
+        # and self.num_coercions_total > 0
+        mock_get_cache.return_value = {'progress': 50.0}
+        self.import_file.num_coercions_total = 1
+        self.assertEqual(self.import_file.cleaning_progress_pct, 100.0)
+
+        self.import_file.num_coercions_total = 0
+
+        # coercion_mapping_active = True
+        self.assertEqual(self.import_file.cleaning_progress_pct, 50.0)
+
+        # below will fail, references non-existent property  coercion_mapping_done
+        # i.e self.import_file.coercion_mapping_done = False
+
+        # coercion_mapping_active = False, coercion_mapping_queued = True
+        self.assertEqual(self.import_file.cleaning_progress_pct, 0.0)
+
+        # coercion_mapping_active = False, coercion_mapping_queued = False
+        # coercion_mapping_done = False
+        self.assertEqual(self.import_file.cleaning_progress_pct, 0.0)
+
+        # coercion_mapping_active = False, coercion_mapping_queued = False
+        # coercion_mapping_done = True
+        self.assertEqual(self.import_file.cleaning_progress_pct, 100.0)
+
+    @mock.patch('seed.data_importer.models.get_cache_state')
+    def test_export_ready(self, mock_get_cache_state):
+        mock_get_cache_state.side_effect = (True, False, True, True)
+
+        export_file = mock_file_factory('export_file.csv')
+        self.import_file.export_file = export_file
+        self.assertTrue(self.import_file.export_ready)
+
+        # get_cache_state(self.EXPORT_READY_CACHE_KEY, True) = False
+        self.assertFalse(self.import_file.export_ready)
+
+        # fails as self.export_file is None is not true if export_file
+        # is null should be == None (FileField overides __eq__)
+        # get_cache_state(self.EXPORT_READY_CACHE_KEY, True) = True
+        self.import_file.export_file = None
+        self.assertFalse(self.import_file.export_ready)
+
+        # get_cache_state(self.EXPORT_READY_CACHE_KEY, True) = True
+        self.import_file.export_file = ''
+        self.assertFalse(self.import_file.export_ready)
+
+    # fails as no reverse for url
+    def test_urls(self):
+        self.assertNotEqual(
+            self.import_file.export_url, None
+        )
+        self.assertNotEqual(
+            self.import_file.generate_url, None
+        )
+        self.assertNotEqual(
+            self.import_file._merge_progress_url, None
+        )
+        self.assertNotEqual(
+            self.import_file.premerge_progress_url, None
+        )
+        self.assertNotEqual(
+            self.import_file.restart_cleaning_url, None
+        )
+
+
+class TestTableColumnMapping(TestCase):
+
+    def setUp(self):
+        self.import_record = ImportRecord.objects.create()
+        self.file = mock_file_factory('file1.csv')
+        self.import_file = ImportFile.objects.create(
+            import_record=self.import_record, file=self.file
+        )
+        self.tcm = TableColumnMapping.objects.create(
+            source_string='test', import_file=self.import_file,
+            destination_model='TestModel', destination_field='test_field'
+        )
+
+    def tearDown(self):
+        ImportFile.objects.all().delete()
+        ImportRecord.objects.all().delete()
+        TableColumnMapping.objects.all().delete()
+
+    @mock.patch('seed.data_importer.models.hashlib')
+    def test_source_string_sha(self, mock_hashlib):
+        mock_hashlib.md5.return_value.hexdigest.return_value = '012345ab'
+        self.assertEqual(self.tcm.source_string_sha, '012345ab')
+        mock_hashlib.md5.assert_called()
+        mock_hashlib.md5.return_value.update.assert_called_with('test')
+
+    def test_string_properties(self):
+        self.assertEqual(self.tcm.combined_model_and_field, 'TestModel.test_field')
+        self.assertEqual(self.tcm.friendly_destination_model, 'Test Model')
+        self.assertEqual(self.tcm.friendly_destination_field, 'Test field')
+        self.assertEqual(
+            self.tcm.friendly_destination_model_and_field, 'Test Model: Test field'
+        )
+
+        self.tcm.ignored = True
+        self.assertEqual(self.tcm.friendly_destination_model_and_field, 'Ignored')
+
+        self.tcm.ignored = None
+        self.tcm.destination_field = None
+        self.assertEqual(self.tcm.friendly_destination_model_and_field, 'Unmapped')
+
+    # will fail as self.destination_django_field is None
+    def test_destination_django_field_has_choices(self):
+        self.assertTrue(self.tcm.destination_django_field_has_choices)
+
+    # will fail as self.destination_django_field is None
+    def test_destination_django_field_choices(self):
+        self.assertEqual(self.tcm.destination_django_field_choices, 'test')
+
+
+class TestDataCoercionMapping(TestCase):
+
+    def setUp(self):
+        self.import_record = ImportRecord.objects.create()
+        self.file = mock_file_factory('file1.csv')
+        self.import_file = ImportFile.objects.create(
+            import_record=self.import_record, file=self.file
+        )
+        self.tcm = TableColumnMapping.objects.create(
+            source_string='test', import_file=self.import_file,
+            destination_model='TestModel', destination_field='test_field'
+        )
+        self.dcm = DataCoercionMapping.objects.create(
+            source_string='test', table_column_mapping=self.tcm,
+            destination_value='test', destination_type='Test'
+        )
+
+    def tearDown(self):
+        ImportFile.objects.all().delete()
+        ImportRecord.objects.all().delete()
+        TableColumnMapping.objects.all().delete()
+        DataCoercionMapping.objects.all().delete()
+
+    def test_save(self):
+        self.dcm.confidence = 1.0
+        # this *should* blow up but doesn't becuase someone decided to use a
+        # bare except with assert. Facepalm.
+        self.dcm.save()
+        self.assertTrue(self.dcm.valid_destination_value)
+        self.assertTrue(self.dcm.is_mapped)
+
+        # will fail with bare except
+        # should raise this as table_column_mapping.destination_django_field
+        # was redefined to always be None
+        with self.assertRaises(AttributeError):
+            self.dcm.confidence = 0.0
+            self.dcm.save()
+
+        self.destination_value = None
+        self.dcm.save()
+        self.assertFalse(self.dcm.valid_destination_value)
+        self.assertFalse(self.dcm.is_mapped)
+
+        self.destination_value = None
+        self.dcm.save()
+        self.assertFalse(self.dcm.valid_destination_value)
+        self.assertFalse(self.dcm.is_mapped)
+
+
+    @mock.patch('seed.data_importer.models.hashlib')
+    def test_source_string_sha(self, mock_hashlib):
+        mock_hashlib.md5.return_value.hexdigest.return_value = '012345ab'
+        self.assertEqual(self.dcm.source_string_sha, '012345ab')
+        mock_hashlib.md5.assert_called()
+        mock_hashlib.md5.return_value.update.assert_called_with('test')
