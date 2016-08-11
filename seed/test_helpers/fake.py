@@ -66,11 +66,12 @@ class BaseFake(object):
         return attr
 
     def address_line_1(self):
-        return "{} {} {}".format(
+        address = "{} {} {}".format(
             self.fake.randomize_nb_elements(1000),
             self.fake.last_name(),
             self.fake.random_element(elements=STREET_SUFFIX)
         )
+        return address 
 
     def owner(self, city=None, state=None):
         email = self.fake.company_email()
@@ -205,9 +206,11 @@ class FakeTaxLotStateFactory(BaseFake):
     """
     Factory Class for producing TaxLotState instances.
     """
+    
+    def __init__(self):
+        super(FakeTaxLotStateFactory, self).__init__()
 
-    def get_taxlot_state(self, **kw):
-        """Return a taxlot state populated with pseudo random data"""
+    def get_details(self):
         taxlot_details = {
             'jurisdiction_taxlot_identifier': self.fake.numerify(text='#####'),
             'block_number': self.fake.numerify(text='#####'),
@@ -216,5 +219,11 @@ class FakeTaxLotStateFactory(BaseFake):
             'state': 'Oregon',
             'postal_code': "970{}".format(self.fake.numerify(text='##')),
         }
+        
+        return taxlot_details
+    
+    def get_taxlot_state(self, **kw):
+        """Return a taxlot state populated with pseudo random data"""
+        taxlot_details = self.get_details()
         taxlot_details.update(kw)
         return TaxLotState.objects.create(**taxlot_details)
