@@ -12,7 +12,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpResponse
 from rest_framework import viewsets
 from rest_framework.decorators import detail_route
-from seed.decorators import ajax_request_class, require_organization_id_class
+from seed.decorators import ajax_request_class
 from seed.lib.superperms.orgs.decorators import has_perm_class
 from seed.utils.api import api_endpoint_class
 from seed.utils.organizations import create_organization
@@ -75,13 +75,17 @@ class UserViewSet(LoginRequiredMixin, viewsets.ViewSet):
                 }
             }
         """
+        try:
+            user = User.objects.get(pk=pk)
+        except:
+            return HttpResponse("Could not retrieve user with pk = " + str(pk))
         return HttpResponse(json.dumps({
             'status': 'success',
             'user': {
-                'first_name': request.user.first_name,
-                'last_name': request.user.last_name,
-                'email': request.user.email,
-                'api_key': request.user.api_key,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+                'email': user.email,
+                'api_key': user.api_key,
             }
         }))
 

@@ -13,17 +13,14 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpResponse
 from rest_framework import viewsets
 
-from seed.data_importer.models import ImportRecord
+from seed.data_importer.models import ImportRecord, ImportFile
 from seed.decorators import ajax_request_class, require_organization_id_class
 from seed.lib.superperms.orgs.decorators import has_perm_class
 from seed.models import BuildingSnapshot
 from seed.utils.api import api_endpoint_class
 from seed.utils.time import convert_to_js_timestamp
-from seed.landing.models import SEEDUser as User
 from seed.lib.superperms.orgs.models import (
-    ROLE_OWNER,
     Organization,
-    OrganizationUser,
 )
 
 _log = logging.getLogger(__name__)
@@ -334,3 +331,127 @@ class DatasetViewSet(LoginRequiredMixin, viewsets.ViewSet):
 
         return HttpResponse(json.dumps(
             {'status': 'success', 'id': record.pk, 'name': record.name}))
+
+
+class DataFileViewSet(LoginRequiredMixin, viewsets.ViewSet):
+
+    @api_endpoint_class
+    @ajax_request_class
+    def retrieve(self, request, pk=None):
+        """
+        Retrieves details about an ImportFile.
+            Returns::
+            {
+                'status': 'success',
+                'import_file': {
+                    "name": Name of the uploaded file,
+                    "number_of_buildings": number of buildings in the file,
+                    "number_of_mappings": number of mapped columns,
+                    "number_of_cleanings": number of cleaned fields,
+                    "source_type": type of data in file, e.g. 'Assessed Raw'
+                    "number_of_matchings": Number of matched buildings in file,
+                    "id": ImportFile ID,
+                    'dataset': {
+                        'name': Name of ImportRecord file belongs to,
+                        'id': ID of ImportRecord file belongs to,
+                        'importfiles': [  # All ImportFiles in this ImportRecord, with
+                            # requested ImportFile first:
+                            {'name': Name of file,
+                             'id': ID of ImportFile
+                            }
+                            ...
+                        ]
+                    }
+                }
+            }
+        ---
+        parameter_strategy: replace
+        parameters:
+            - name: pk
+              description: "Primary Key"
+              required: true
+              paramType: path
+        """
+        from seed.models import obj_to_dict
+
+        import_file_id = pk
+        orgs = request.user.orgs.all()
+        import_file = ImportFile.objects.get(
+            pk=import_file_id
+        )
+        d = ImportRecord.objects.filter(
+            super_organization__in=orgs, pk=import_file.import_record_id
+        )
+        # check if user has access to the import file
+        if not d.exists():
+            return HttpResponse(json.dumps({
+                'status': 'success',
+                'import_file': {},
+            }))
+
+        f = obj_to_dict(import_file)
+        f['name'] = import_file.filename_only
+        f['dataset'] = obj_to_dict(import_file.import_record)
+        # add the importfiles for the matching select
+        f['dataset']['importfiles'] = []
+        files = f['dataset']['importfiles']
+        for i in import_file.import_record.files:
+            files.append({
+                'name': i.filename_only,
+                'id': i.pk
+            })
+        # make the first element in the list the current import file
+        i = files.index({
+            'name': import_file.filename_only,
+            'id': import_file.pk
+        })
+        files[0], files[i] = files[i], files[0]
+
+        return HttpResponse(json.dumps({
+            'status': 'success',
+            'import_file': f,
+        }))
+
+    @api_endpoint_class
+    @ajax_request_class
+    @has_perm_class('requires_member')
+    def destroy(self, request, pk=None):
+        """
+        Deletes an ImportFile from a dataset.
+        type:
+            status:
+                required: true
+                description: Either 'success' or 'error'
+            message:
+                required: false
+                description: Error message text, if any
+        ---
+        parameter_strategy: replace
+        parameters:
+            - name: pk
+              description: "Primary Key"
+              required: true
+              paramType: path
+            - name: organization_id
+              description: The organization_id
+              required: true
+              paramType: query
+        """
+        body = request.data
+        file_id = pk
+        import_file = ImportFile.objects.get(pk=file_id)
+        d = ImportRecord.objects.filter(
+            super_organization_id=body['organization_id'],
+            pk=import_file.import_record.pk
+        )
+        # check if user has access to the dataset
+        if not d.exists():
+            return HttpResponse(json.dumps({
+                'status': 'error',
+                'message': 'user does not have permission to delete file',
+            }))
+
+        import_file.delete()
+        return HttpResponse(json.dumps({
+            'status': 'success',
+        }))

@@ -9,6 +9,7 @@ import logging
 
 from seed.decorators import ajax_request_class
 from seed.lib.superperms.orgs.decorators import has_perm_class
+from rest_framework.decorators import detail_route
 from seed.lib.superperms.orgs.models import (
     ROLE_OWNER,
     ROLE_MEMBER,
@@ -27,6 +28,8 @@ from seed.cleansing.models import (
 from django.contrib.auth.mixins import LoginRequiredMixin
 from rest_framework import viewsets
 from django.http import HttpResponse
+from seed.utils.buildings import get_columns as utils_get_columns
+from seed.public.models import INTERNAL, PUBLIC, SharedBuildingField
 
 
 def _dict_org(request, organizations):
@@ -293,6 +296,49 @@ class NestedOrganizationUserViewSet(viewsets.ViewSet):
 
         return HttpResponse(json.dumps({'status': 'success', 'users': users}))
 
+    @api_endpoint_class
+    @ajax_request_class
+    @has_perm_class('requires_owner')
+    @detail_route(methods=['put'])
+    def add_existing_user(self, request, organizations_pk=None, pk=None):
+        """
+        Adds an existing user to an organization.
+        ---
+        parameter_strategy: override
+        parameters:
+            - name: organizations_pk
+              description: The ID (primary key) for the organization to add the user to
+              required: true
+              paramType: path
+            - name: pk
+              description: The ID (primary key) of the existing user to add to the org
+              required: true
+              paramType: path
+        """
+        """
+        Returns::
+
+            {
+                'status': 'success' or 'error',
+                'message': 'message, if any',
+            }
+
+
+        """
+        try:
+            org = Organization.objects.get(pk=organizations_pk)
+        except:
+            return HttpResponse("Could not retrieve organization with pk = " + str(organizations_pk))
+        try:
+            user = User.objects.get(pk=pk)
+        except:
+            return HttpResponse("Could not retrieve user with pk = " + str(pk))
+        try:
+            org.add_member(user)
+        except:
+            return HttpResponse("Could not add user to organization")
+        return HttpResponse(json.dumps({'status': 'success'}))
+
 
 class OrganizationViewSet(LoginRequiredMixin, viewsets.ViewSet):
 
@@ -447,3 +493,78 @@ class OrganizationViewSet(LoginRequiredMixin, viewsets.ViewSet):
         return HttpResponse(json.dumps({'status': 'success',
                                         'message': 'organization created',
                                         'organization_id': org.pk}))
+
+    @api_endpoint_class
+    @ajax_request_class
+    @detail_route(methods=['get'])
+    def shared_fields(self, request, pk=None):
+        """
+        Retrieves all fields marked as shared for this org tree.
+
+        :GET: Expects organization_id in the query string.
+
+        Returns::
+
+            {
+             'status': 'success',
+             'shared_fields': [
+                 {
+                  "title": Display name of field,
+                  "sort_column": database/search name of field,
+                  "class": css used for field,
+                  "title_class": css used for title,
+                  "type": data type of field,
+                      (One of: 'date', 'floor_area', 'link', 'string', 'number')
+                  "field_type": classification of field.  One of:
+                      'contact_information', 'building_information',
+                      'assessor', 'pm',
+                  "sortable": True if buildings can be sorted on this field,
+                 }
+                 ...
+               ],
+               'public_fields': [
+                   {
+                      "title": Display name of field,
+                      "sort_column": database/search name of field,
+                      "class": css used for field,
+                      "title_class": css used for title,
+                      "type": data type of field,
+                        (One of: 'date', 'floor_area', 'link', 'string', 'number')
+                      "field_type": classification of field.  One of:
+                          'contact_information', 'building_information',
+                          'assessor', 'pm',
+                      "sortable": True if buildings can be sorted on this field,
+                     }
+                     ...
+               ]
+            }
+
+        """
+        org_id = pk
+        try:
+            org = Organization.objects.get(pk=org_id)
+        except:
+            return HttpResponse("Could not retrieve organization by ID=" + str(pk))
+
+        result = {'status': 'success',
+                  'shared_fields': [],
+                  'public_fields': []}
+        columns = utils_get_columns(org_id, True)['fields']
+        columns = {
+            field['sort_column']: field for field in columns
+            }
+
+        for exportable_field in SharedBuildingField.objects.filter(
+                org=org, field_type=INTERNAL
+        ).select_related('field'):
+            field_name = exportable_field.field.name
+            shared_field = columns[field_name]
+            result['shared_fields'].append(shared_field)
+        for exportable_field in SharedBuildingField.objects.filter(
+                org=org, field_type=PUBLIC
+        ).select_related('field'):
+            field_name = exportable_field.field.name
+            shared_field = columns[field_name]
+            result['public_fields'].append(shared_field)
+
+        return HttpResponse(json.dumps(result))

@@ -34,6 +34,13 @@ from seed.utils.api import api_endpoint
 
 from seed.utils import projects as utils
 from seed.utils.time import convert_to_js_timestamp
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.http import HttpResponse
+from rest_framework import viewsets
+from seed.decorators import ajax_request_class, require_organization_id_class
+from seed.lib.superperms.orgs.decorators import has_perm_class
+from seed.utils.api import api_endpoint_class
+
 
 _log = logging.getLogger(__name__)
 
@@ -41,6 +48,167 @@ DEFAULT_CUSTOM_COLUMNS = [
     'project_id',
     'project_building_snapshots__status_label__name'
 ]
+
+
+class ProjectsViewSet(LoginRequiredMixin, viewsets.ViewSet):
+
+    @require_organization_id_class
+    @api_endpoint_class
+    @ajax_request_class
+    @has_perm_class('requires_viewer')
+    def list(self, request):
+        """
+        Retrieves all projects for a given organization.
+        Returns::
+
+            {
+                'status': 'success',
+                'projects': [
+                    {
+                        'name': project's name,
+                        'slug': project's identifier,
+                        'status': 'active',
+                        'number_of_buildings': Count of buildings associated with project
+                        'last_modified': Timestamp when project last changed
+                        'last_modified_by': {
+                            'first_name': first name of user that made last change,
+                            'last_name': last name,
+                            'email': email address,
+                        },
+                        'is_compliance': True if project is a compliance project,
+                        'compliance_type': Description of compliance type,
+                        'deadline_date': Timestamp of when compliance is due,
+                        'end_date': Timestamp of end of project
+                    }...
+                ]
+            }
+        ---
+        parameters:
+            - name: organization_id
+              description: The organization_id for this user's organization
+              required: true
+              paramType: query
+        """
+        organization_id = request.query_params.get('organization_id', None)
+        projects = []
+
+        for p in Project.objects.filter(
+                super_organization_id=organization_id,
+        ).distinct():
+            if p.last_modified_by:
+                first_name = p.last_modified_by.first_name
+                last_name = p.last_modified_by.last_name
+                email = p.last_modified_by.email
+            else:
+                first_name = None
+                last_name = None
+                email = None
+            p_as_json = {
+                'name': p.name,
+                'slug': p.slug,
+                'status': 'active',
+                'number_of_buildings': p.project_building_snapshots.count(),
+                # convert to JS timestamp
+                'last_modified': int(p.modified.strftime("%s")) * 1000,
+                'last_modified_by': {
+                    'first_name': first_name,
+                    'last_name': last_name,
+                    'email': email,
+                },
+                'is_compliance': p.has_compliance,
+            }
+            if p.has_compliance:
+                compliance = p.get_compliance()
+                p_as_json['end_date'] = convert_to_js_timestamp(
+                    compliance.end_date)
+                p_as_json['deadline_date'] = convert_to_js_timestamp(
+                    compliance.deadline_date)
+                p_as_json['compliance_type'] = compliance.compliance_type
+            projects.append(p_as_json)
+
+        return HttpResponse(json.dumps({'status': 'success', 'projects': projects}))
+
+    @api_endpoint_class
+    @ajax_request_class
+    @has_perm_class('requires_member')
+    def create(self, request):
+        """
+        Creates a new project.
+        @TODO: What's a compliance_type?
+        ---
+        type:
+            status:
+                required: true
+                type: string
+                description: success or error
+            message:
+                required: false
+                type: string
+                description: Error message, if any
+            project_slug:
+                required: false
+                type: string
+                description: Identifier of new project, if project successfully
+                             created
+        parameters:
+            - name: organization_id
+              description: The organization_id
+              required: true
+              paramType: query
+            - name: name
+              description: name of new project
+              required: true
+            - name: compliance_type
+              description: description of type of compliance
+              required: true
+            - name: description
+              description: description of new project
+              required: true
+            - name: end_date
+              description: Timestamp for when project ends
+              required: true
+            - name: deadline_date
+              description: Timestamp for compliance deadline
+              required: true
+        """
+        body = request.data
+        project_json = body
+        organization_id = request.query_params.get('organization_id', None)
+
+        if Project.objects.filter(
+            name=project_json['name'],
+            super_organization_id=organization_id
+        ).exists():
+            return HttpResponse(json.dumps({
+                'status': 'error',
+                'message': 'project already exists for user'
+            }))
+
+        project, created = Project.objects.get_or_create(
+            name=project_json['name'],
+            owner=request.user,
+            super_organization_id=organization_id,
+        )
+        if not created:
+            return HttpResponse(json.dumps({
+                'status': 'error',
+                'message': 'project already exists for the organization'
+            }))
+        project.last_modified_by = request.user
+        project.description = project_json.get('description')
+        project.save()
+
+        compliance_type = project_json.get('compliance_type', None)
+        end_date = project_json.get('end_date', None)
+        deadline_date = project_json.get('deadline_date', None)
+        if all(v is not None for v in (compliance_type, end_date, deadline_date)):
+            c = Compliance(project=project)
+            c.compliance_type = compliance_type
+            c.end_date = parser.parse(project_json['end_date'])
+            c.deadline_date = parser.parse(project_json['deadline_date'])
+            c.save()
+
+        return HttpResponse(json.dumps({'status': 'success', 'project_slug': project.slug}))
 
 
 @require_organization_id

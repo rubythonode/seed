@@ -30,8 +30,9 @@ from seed.views.main import (
     delete_buildings, delete_organization
 )
 
-from seed.views.datasets import DatasetViewSet
+from seed.views.datasets import DatasetViewSet, DataFileViewSet
 from seed.views.organizations import OrganizationViewSet, NestedOrganizationUserViewSet
+from seed.views.projects import ProjectsViewSet
 from seed.views.users import UserViewSet
 from rest_framework import routers
 from rest_framework_nested import routers as nested_routers
@@ -44,6 +45,8 @@ nested_router_b.register(r'users', NestedOrganizationUserViewSet, base_name="use
 api_v2_router = routers.DefaultRouter()
 api_v2_router.register(r'datasets', DatasetViewSet, base_name="datasets")
 api_v2_router.register(r'users', UserViewSet, base_name="users")
+api_v2_router.register(r'data_files', DataFileViewSet, base_name="data_files")
+api_v2_router.register(r'projects', ProjectsViewSet, base_name="projects")
 # api_v2_router.register(r'organizations', OrganizationViewSet, base_name="organizations")
 
 # prefix, to revert back to original endpoints, leave this blank
