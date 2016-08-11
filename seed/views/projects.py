@@ -40,6 +40,7 @@ from rest_framework import viewsets
 from seed.decorators import ajax_request_class, require_organization_id_class
 from seed.lib.superperms.orgs.decorators import has_perm_class
 from seed.utils.api import api_endpoint_class
+from rest_framework import status
 
 
 _log = logging.getLogger(__name__)
@@ -209,6 +210,101 @@ class ProjectsViewSet(LoginRequiredMixin, viewsets.ViewSet):
             c.save()
 
         return HttpResponse(json.dumps({'status': 'success', 'project_slug': project.slug}))
+
+    @require_organization_id_class
+    @api_endpoint_class
+    @ajax_request_class
+    @has_perm_class('requires_viewer')
+    def retrieve(self, request, pk=None):
+        """
+        Retrieves details about a project.
+        Returns::
+            {
+             'name': project's name,
+             'slug': project's identifier,
+             'status': 'active',
+             'number_of_buildings': Count of buildings associated with project
+             'last_modified': Timestamp when project last changed
+             'last_modified_by': {
+                'first_name': first name of user that made last change,
+                'last_name': last name,
+                'email': email address,
+                },
+             'is_compliance': True if project is a compliance project,
+             'compliance_type': Description of compliance type,
+             'deadline_date': Timestamp of when compliance is due,
+             'end_date': Timestamp of end of project
+            }
+        ---
+        parameter_strategy: replace
+        parameters:
+            - name: pk
+              description: "Primary Key"
+              required: true
+              paramType: path
+            - name: organization_id
+              description: The organization_id
+              required: true
+              paramType: query
+        """
+        try:
+            project = Project.objects.get(pk=pk)
+        except Exception as e:
+            return HttpResponse("Could not retrieve Project with id=" + pk)
+        organization_id = request.query_params.get('organization_id', None)
+        if project.super_organization_id != int(organization_id):
+            return HttpResponse(json.dumps({'status': 'error', 'message': 'Permission denied'}))
+        project_dict = project.__dict__
+        project_dict['is_compliance'] = project.has_compliance
+        if project_dict['is_compliance']:
+            c = project.get_compliance()
+            project_dict['end_date'] = convert_to_js_timestamp(c.end_date)
+            project_dict['deadline_date'] = convert_to_js_timestamp(
+                c.deadline_date)
+            project_dict['compliance_type'] = c.compliance_type
+        del(project_dict['_state'])
+        del(project_dict['modified'])
+        del(project_dict['created'])
+
+        return HttpResponse(json.dumps({'status': 'success', 'project': project_dict}))
+
+    @api_endpoint_class
+    @ajax_request_class
+    @has_perm_class('requires_member')
+    def destroy(self, request, pk=None):
+        """
+        Deletes a project.
+        ---
+        type:
+            status:
+                required: true
+                description: success or error
+                type: string
+            message:
+                required: false
+                description: error message, if any
+                type: string
+        parameter_strategy: replace
+        parameters:
+            - name: pk
+              description: "Primary Key"
+              required: true
+              paramType: path
+            - name: organization_id
+              description: The organization_id
+              required: true
+              paramType: query
+        """
+        organization_id = request.query_params.get('organization_id', None)
+        from django.core.exceptions import ObjectDoesNotExist
+        try:
+            project = Project.objects.get(pk=pk)
+        except ObjectDoesNotExist:
+            return HttpResponse(json.dumps({'status': 'error', 'message': 'Could not access project with pk='+str(pk)}), status=status.HTTP_400_BAD_REQUEST)
+        if project.super_organization_id != int(organization_id):
+            return HttpResponse(json.dumps({'status': 'error', 'message': 'Permission denied'}), status=status.HTTP_403_FORBIDDEN)
+        project.delete()
+        return HttpResponse(json.dumps({'status': 'success'}))
 
 
 @require_organization_id
