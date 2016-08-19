@@ -82,13 +82,13 @@ class CreateSampleDataFakePropertyStateFactory(FakePropertyStateFactory):
         self.year_ending = year_ending
         self.case_description = case_description
         self.extra_data_factory = extra_data_factory
-        
+
     def _generate_jurisdiction_property_identifier(self):
         append_choices = ("a", "b", "c")
-        first_number = str(randint(1,999))
+        first_number = str(randint(1, 999))
         second_number = str(randint(1, 999))
         res = None
-        
+
         if randint(0, 1):
             first_number += self.fake.random_element(elements=append_choices)
         if randint(0, 1):
@@ -97,10 +97,10 @@ class CreateSampleDataFakePropertyStateFactory(FakePropertyStateFactory):
             res = first_number + "-" + second_number
         else:
             res = first_number + second_number
-            
+
         return res
 
-    def property_state_details(self):                
+    def property_state_details(self):
         """Return a dict of pseudo random data for use with PropertyState"""
         owner = self.owner()
         property = self.get_details()
@@ -125,8 +125,6 @@ class CreateSampleDataFakePropertyStateFactory(FakePropertyStateFactory):
                             "property_notes": self.case_description,
                             "building_home_energy_score_identifier": randint(88888, 111111),
                             "jurisdiction_property_identifier": self._generate_jurisdiction_property_identifier()}
-        
-        
 
         property.update(data_not_in_base)
 
@@ -209,15 +207,13 @@ class CreateSampleDataFakeTaxLotFactory(FakeTaxLotStateFactory):
 
 def create_cycle(org, year=2015):
     cycle, _ = seed.models.Cycle.objects.get_or_create(name="{y} Annual".format(y=year),
-                                            organization=org,
-                                            start=datetime.datetime(year, 1, 1),
-                                            end=datetime.datetime(year + 1, 1, 1) - datetime.timedelta(seconds=1))
+                                                       organization=org,
+                                                       start=datetime.datetime(year, 1, 1),
+                                                       end=datetime.datetime(year + 1, 1, 1) - datetime.timedelta(seconds=1))
     return cycle
 
 
 def create_cases(org, cycle, tax_lots, properties):
-    #cycle = seed.models.Cycle.objects.filter(organization=org).first()
-
     for (tl_rec, prop_rec) in itertools.product(tax_lots, properties):
         tl_def = tl_rec.data
         prop_def = prop_rec.data
@@ -287,17 +283,17 @@ def create_cases(org, cycle, tax_lots, properties):
 
     return
 
+
 # For all cases make it so the city is the same within a case.  Not strictly required but
 # it is more realistic
 def create_case_A(org, cycle, taxlot_factory, property_factory):
     taxlot = taxlot_factory.tax_lot()
     taxlots = [taxlot]
     properties = [property_factory.property_state(address_line_1=taxlot.data["address"], city=taxlot.data["city"])]
-    
+
     create_cases(org, cycle, taxlots, properties)
 
     return taxlots, properties
-    
 
 
 def create_case_B(org, cycle, taxlot_factory, property_factory, number_properties=3):
@@ -309,7 +305,7 @@ def create_case_B(org, cycle, taxlot_factory, property_factory, number_propertie
         properties.append(property_factory.property_state(city=taxlots[0].data["city"]))
 
     create_cases(org, cycle, taxlots, properties)
-    
+
     return taxlots, properties
 
 
@@ -322,28 +318,11 @@ def create_case_C(org, cycle, taxlot_factory, property_factory, number_taxlots=3
         taxlots.append(taxlot_factory.tax_lot(city=properties[0].data["city"]))
 
     create_cases(org, cycle, taxlots, properties)
-    
+
     return taxlots, properties
 
 
-def create_case_D(org, cycle, taxlot_factory, property_factory):
-
-    campus = property_factory.property_state()
-    city = campus.data["city"]
-    campus.data["pm_parent_property_id"] = campus.data["building_portfolio_manager_identifier"]
-
-    campus_property_id = campus.data["pm_parent_property_id"]
-
-    taxlots = []
-    for i in range(3):
-        taxlots.append(taxlot_factory.tax_lot(city=city))
-
-    properties = []
-    for i in range(5):
-        properties.append(property_factory.property_state(pm_parent_property_id=campus_property_id, city=city))
-
-    #cycle = seed.models.Cycle.objects.filter(organization=org).first()
-
+def _create_case_D(org, cycle, taxlots, properties, campus):
     def add_extra_data(state, extra_data):
         if not extra_data:
             return state
@@ -384,13 +363,33 @@ def create_case_D(org, cycle, taxlot_factory, property_factory):
     seed.models.TaxLotProperty.objects.get_or_create(property_view=property_views[5], taxlot_view=taxlot_views[1], cycle=cycle)
     seed.models.TaxLotProperty.objects.get_or_create(property_view=property_views[5], taxlot_view=taxlot_views[2], cycle=cycle)
 
-    return
+
+def create_case_D(org, cycle, taxlot_factory, property_factory):
+
+    campus = property_factory.property_state()
+    city = campus.data["city"]
+    campus.data["pm_parent_property_id"] = campus.data["building_portfolio_manager_identifier"]
+
+    campus_property_id = campus.data["pm_parent_property_id"]
+
+    taxlots = []
+    for i in range(3):
+        taxlots.append(taxlot_factory.tax_lot(city=city))
+
+    properties = []
+    for i in range(5):
+        properties.append(property_factory.property_state(pm_parent_property_id=campus_property_id, city=city))
+
+    _create_case_D(org, cycle, taxlots, properties, campus)
+
+    return taxlots, properties, campus
+
 
 def update_taxlot_year(taxlot, year):
     from random import random
-    
+
     taxlot.extra_data["Tax Year"] = year
-    
+
     # FIXME  This is a hack to get the multi-year data working.
     # The issue is that nothing is changing in the non-extra_data fields
     # in the TaxLotState between years so when the code creates the second
@@ -399,28 +398,28 @@ def update_taxlot_year(taxlot, year):
     # create_cases function but this is much faster and should work
     # just fine for creating sample data
     taxlot.data["confidence"] = random()
-    
+
     # change something else in extra_data aside from the year:
     taxlot.extra_data["taxlot_extra_data_field_1"] = taxlot.extra_data["taxlot_extra_data_field_1"] + u"_" + unicode(year)
-    
+
     return taxlot
 
 
 def update_property_year(property, year):
     from random import randint
-    
+
     property.data["year_ending"] = property.data["year_ending"].replace(year=year)
-    
-    #randomize "site_eui" so something else changes between years
+
+    # randomize "site_eui" so something else changes between years
     property.data["site_eui"] = unicode(float(randint(0, 1000)) + float(randint(0, 9)) / 10)
-    
-    #change something in extra_data so something there changes too
+
+    # change something in extra_data so something there changes too
     property.extra_data["property_extra_data_field_1"] = property.extra_data["property_extra_data_field_1"] + u"_" + unicode(year)
-    
+
     return property
 
 
-def create_additional_years(org, years, pairs_taxlots_and_properties, case):
+def create_additional_years(org, years, tuples_taxlots_properties_campus, case):
     # pairs_taxlots_and_properties is a list of pairs of lists.
     # Simplest case is A which is 1-1 which means each entry in pairs_taxlots_and_properties
     # will look like [[taxlot_1], [property_1]].  An entry in one property to many taxlots
@@ -428,16 +427,34 @@ def create_additional_years(org, years, pairs_taxlots_and_properties, case):
     for year in years:
         print "Creating additional year for case {c}:\t{y}".format(c=case, y=year)
         cycle = create_cycle(org, year)
-        
+
         update_taxlot_f = lambda x: update_taxlot_year(x, year)
         update_property_f = lambda x: update_property_year(x, year)
-        
-        for idx, [taxlots, properties] in enumerate(pairs_taxlots_and_properties):
+
+        for idx, [taxlots, properties] in enumerate(tuples_taxlots_properties_campus):
             taxlots = map(update_taxlot_f, taxlots)
             properties = map(update_property_f, properties)
             print "Creating {i}".format(i=idx)
             create_cases(org, cycle, taxlots, properties)
-        
+
+
+def create_additional_years_D(org, years, pairs_taxlots_and_properties):
+    # Case D has its own logic and is so far separate from the other cases
+    # Might be able to eventually be refactored into one but for now it is distinct
+    for year in years:
+        print "Creating additional year for case D:\t{y}".format(y=year)
+        cycle = create_cycle(org, year)
+
+        update_taxlot_f = lambda x: update_taxlot_year(x, year)
+        update_property_f = lambda x: update_property_year(x, year)
+
+        for idx, [taxlots, properties, campus] in enumerate(pairs_taxlots_and_properties):
+            taxlots = map(update_taxlot_f, taxlots)
+            properties = map(update_property_f, properties)
+            campus = update_property_f(campus)
+            print "Creating {i}".format(i=idx)
+            _create_case_D(org, cycle, taxlots, properties, campus)
+
 
 def create_sample_data(years, a_ct=0, b_ct=0, c_ct=0, d_ct=0):
     year = years[0]
@@ -450,36 +467,38 @@ def create_sample_data(years, a_ct=0, b_ct=0, c_ct=0, d_ct=0):
     taxlot_factory = CreateSampleDataFakeTaxLotFactory(org, taxlot_extra_data_factory)
     property_extra_data_factory = FakePropertyStateExtraDataFactory()
     property_factory = CreateSampleDataFakePropertyStateFactory(org, year_ending, "Case A-1: 1 Property, 1 Tax Lot", property_extra_data_factory)
-    
+
     pairs_taxlots_and_properties_A = []
     pairs_taxlots_and_properties_B = []
     pairs_taxlots_and_properties_C = []
+    tuples_taxlots_properties_campus_D = []
 
     for i in range(a_ct):
         print "Creating Case A {i}".format(i=i)
         pairs_taxlots_and_properties_A.append(create_case_A(org, cycle, taxlot_factory, property_factory))
-        
-        
+
     create_additional_years(org, extra_years, pairs_taxlots_and_properties_A, "A")
 
     for i in range(b_ct):
         print "Creating Case B {i}".format(i=i)
         property_factory.case_description = "Case B-1: Multiple (3) Properties, 1 Tax Lot"
         pairs_taxlots_and_properties_B.append(create_case_B(org, cycle, taxlot_factory, property_factory))
-        
+
     create_additional_years(org, extra_years, pairs_taxlots_and_properties_B, "B")
 
     for i in range(c_ct):
         print "Creating Case C {i}".format(i=i)
         property_factory.case_description = "Case C: 1 Property, Multiple (3) Tax Lots"
         pairs_taxlots_and_properties_C.append(create_case_C(org, cycle, taxlot_factory, property_factory))
-        
+
     create_additional_years(org, extra_years, pairs_taxlots_and_properties_C, "C")
 
     for i in range(d_ct):
         print "Creating Case D {i}".format(i=i)
         property_factory.case_description = "Case D: Campus with Multiple associated buildings"
-        create_case_D(org, cycle, taxlot_factory, property_factory)
+        tuples_taxlots_properties_campus_D.append(create_case_D(org, cycle, taxlot_factory, property_factory))
+
+    create_additional_years_D(org, extra_years, tuples_taxlots_properties_campus_D)
 
 
 class Command(BaseCommand):
@@ -488,7 +507,7 @@ class Command(BaseCommand):
         parser.add_argument('--B', dest='case_B_count', default=False)
         parser.add_argument('--C', dest='case_C_count', default=False)
         parser.add_argument('--D', dest='case_D_count', default=False)
-        parser.add_argument('--Y', dest='years', default="2015")
+        parser.add_argument('--Y', dest='years', default="2015,2016")
         return
 
     def handle(self, *args, **options):
