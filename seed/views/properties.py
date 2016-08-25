@@ -4,16 +4,38 @@
 :copyright (c) 2014 - 2016, The Regents of the University of California, through Lawrence Berkeley National Laboratory (subject to receipt of any required approvals from the U.S. Department of Energy) and contributors. All rights reserved.  # NOQA
 :author
 """
+import itertools
+import json
+
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.forms.models import model_to_dict
 
-from seed.models import Cycle, PropertyView, TaxLotView, TaxLotState, TaxLotProperty
-from seed.decorators import ajax_request, require_organization_id, require_organization_membership
+from rest_framework.parsers import JSONParser
+from rest_framework.renderers import JSONRenderer
+from rest_framework.response import Response
+from rest_framework.viewsets import ViewSet
+from rest_framework import status
+
+from seed.decorators import (
+    ajax_request, DecoratorMixin,
+    require_organization_id, require_organization_membership,
+)
+
 from seed.lib.superperms.orgs.decorators import has_perm
-from seed.models import Column
-from seed.utils.api import api_endpoint
-import itertools
+from seed.models import (
+    Column, Cycle, AUDIT_USER_EDIT, PropertyAuditLog, PropertyView,
+    TaxLotAuditLog, TaxLotView, TaxLotState, TaxLotProperty
+)
+
+from seed.serializers.properties import (
+    PropertyStateSerializer, PropertyViewSerializer
+)
+from seed.serializers.taxlots import (
+    TaxLotViewSerializer, TaxLotStateSerializer
+)
+from seed.utils.api import api_endpoint, drf_api_endpoint
+
 
 # Global toggle that controls whether or not to display the raw extra
 # data fields in the columns returned for the view.
@@ -140,33 +162,6 @@ def get_properties(request):
         response['results'].append(p)
 
     return response
-
-
-@require_organization_id
-@require_organization_membership
-@api_endpoint
-@ajax_request
-@login_required
-@has_perm('requires_viewer')
-def get_property(request, property_pk):
-    property_view = PropertyView.objects.select_related('property', 'cycle', 'state') \
-        .get(property_id=property_pk, property__organization_id=request.GET['organization_id'])
-
-    # Lots this property is on
-    lot_view_pks = TaxLotProperty.objects.filter(property_view_id=property_view.pk).values_list('taxlot_view_id',
-                                                                                                flat=True)
-    lot_views = TaxLotView.objects.filter(pk__in=lot_view_pks).select_related('cycle', 'state')
-
-    p = model_to_dict(property_view)
-    p['state'] = model_to_dict(property_view.state)
-    p['property'] = model_to_dict(property_view.property)
-    p['cycle'] = model_to_dict(property_view.cycle)
-    p['lots'] = []
-
-    for lot in lot_views:
-        p['lots'].append(model_to_dict(lot))
-
-    return p
 
 
 @require_organization_id
@@ -311,33 +306,6 @@ def get_taxlots(request):
 @ajax_request
 @login_required
 @has_perm('requires_viewer')
-def get_taxlot(request, taxlot_pk):
-    taxlot_view = TaxLotView.objects.select_related('taxlot', 'cycle', 'state') \
-        .get(taxlot_id=taxlot_pk, taxlot__organization_id=request.GET['organization_id'])
-
-    # Properties on this lot
-    property_view_pks = TaxLotProperty.objects.filter(taxlot_view_id=taxlot_view.pk).values_list('property_view_id',
-                                                                                                 flat=True)
-    property_views = PropertyView.objects.filter(pk__in=property_view_pks).select_related('cycle', 'state')
-
-    l = model_to_dict(taxlot_view)
-    l['state'] = model_to_dict(taxlot_view.state)
-    l['taxlot'] = model_to_dict(taxlot_view.taxlot)
-    l['cycle'] = model_to_dict(taxlot_view.cycle)
-    l['properties'] = []
-
-    for prop in property_views:
-        l['properties'].append(model_to_dict(prop))
-
-    return l
-
-
-@require_organization_id
-@require_organization_membership
-@api_endpoint
-@ajax_request
-@login_required
-@has_perm('requires_viewer')
 def get_cycles(request):
     cycles = Cycle.objects.filter(organization_id=request.GET['organization_id'])
     response = []
@@ -362,11 +330,11 @@ def get_property_columns(request):
             'displayName': 'PM Property ID',
             'pinnedLeft': True,
             'type': 'number',
-            'related': False,
-            'extra_data': False
+            'related': False
         }, {
             'name': 'jurisdiction_property_identifier',
             'displayName': 'Property / Building ID',
+            'type': 'numberStr',
             'related': False
         }, {
             'name': 'jurisdiction_taxlot_identifier',
@@ -510,6 +478,7 @@ def get_property_columns(request):
         }, {
             'name': 'building_home_energy_score_identifier',
             'displayName': 'Home Energy Score ID',
+            'type': 'numberStr',
             'related': False
         }, {
             'name': 'generation_date',
@@ -594,24 +563,6 @@ def get_property_columns(request):
             'source': Column.SOURCE_CHOICES_MAP[c.extra_data_source],
         })
 
-    property_extra_data_fields = ["prop_cb_id"]
-    for c in property_extra_data_fields:
-        columns.append({
-            'name': c,
-            'displayName': c,
-            'treeAggregationType': 'uniqueList',
-            'related': False,
-        })
-
-    taxlot_extra_data_fields = ["taxlot_cb_id"]
-    for c in taxlot_extra_data_fields:
-        columns.append({
-            'name': c,
-            'displayName': c,
-            'treeAggregationType': 'uniqueList',
-            'related': True,
-        })
-
     return columns
 
 
@@ -627,7 +578,7 @@ def get_taxlot_columns(request):
             'name': 'jurisdiction_taxlot_identifier',
             'displayName': 'Tax Lot ID',
             'pinnedLeft': True,
-            'type': 'number',
+            'type': 'numberStr',
             'related': False
         }, {
             'name': 'primary',
@@ -677,6 +628,7 @@ def get_taxlot_columns(request):
         }, {
             'name': 'jurisdiction_property_identifier',
             'displayName': 'Property / Building ID',
+            'type': 'numberStr',
             'related': True
         }, {
             'name': 'building_portfolio_manager_identifier',
@@ -789,7 +741,7 @@ def get_taxlot_columns(request):
         }, {
             'name': 'building_home_energy_score_identifier',
             'displayName': 'Home Energy Score ID',
-            'type': 'number',
+            'type': 'numberStr',
             'related': True
         }, {
             'name': 'generation_date',
@@ -869,22 +821,312 @@ def get_taxlot_columns(request):
             'source': Column.SOURCE_CHOICES_MAP[c.extra_data_source],
         })
 
-    property_extra_data_fields = ["prop_cb_id"]
-    for c in property_extra_data_fields:
-        columns.append({
-            'name': c,
-            'displayName': c,
-            'treeAggregationType': 'uniqueList',
-            'related': True,
-        })
-
-    taxlot_extra_data_fields = ["taxlot_cb_id"]
-    for c in taxlot_extra_data_fields:
-        columns.append({
-            'name': c,
-            'displayName': c,
-            'treeAggregationType': 'uniqueList',
-            'related': False,
-        })
-
     return columns
+
+
+class Property(DecoratorMixin(drf_api_endpoint), ViewSet):
+    renderer_classes = (JSONRenderer,)
+    parser_classes = (JSONParser,)
+
+    def get_property_view(self, property_pk, cycle_pk):
+        """Get the property view"""
+        try:
+            property_view = PropertyView.objects.select_related(
+                'property', 'cycle', 'state'
+            ).get(
+                property_id=property_pk,
+                cycle_id=cycle_pk,
+                property__organization_id=self.request.GET['organization_id']
+            )
+            result = {
+                'status': 'success',
+                'property_view': property_view
+            }
+        except PropertyView.DoesNotExist:
+            result = {
+                'status': 'error',
+                'message': 'property view with id {} does not exist'.format(
+                    property_pk)
+            }
+        except PropertyView.MultipleObjectsReturned:
+            result = {
+                'status': 'error',
+                'message': 'Multiple property views with id {}'.format(
+                    property_pk)
+            }
+        return result
+
+    def get_taxlots(self, property_view_pk):
+        """Get related taxlots"""
+        lot_view_pks = TaxLotProperty.objects.filter(
+            property_view_id=property_view_pk
+        ).values_list('taxlot_view_id', flat=True)
+
+        lot_views = TaxLotView.objects.filter(
+            pk__in=lot_view_pks
+        ).select_related('cycle', 'state')
+        lots = []
+        for lot in lot_views:
+            lots.append(TaxLotViewSerializer(lot).data)
+        return lots
+
+    def get_history(self, property_view):
+        """Return history in reverse order."""
+        history = []
+        current = None
+        audit_logs = PropertyAuditLog.objects.select_related('state').filter(
+            view=property_view
+        ).order_by('-created', '-state_id')
+        for log in audit_logs:
+            changed_fields = json.loads(log.description)\
+                if log.record_type == AUDIT_USER_EDIT else None
+            record = {
+                'state': PropertyStateSerializer(log.state),
+                'date_edited': log.created.ctime(),
+                'source': log.get_record_type_display(),
+                'filename': log.import_filename,
+                'changed_fields': changed_fields
+            }
+            if log.state_id == property_view.state_id:
+                current = record
+            else:
+                history.append(record)
+        return history, current
+
+    def get_property(self, request, property_pk, cycle_pk):
+        """GET view that returns property details."""
+        result = self.get_property_view(property_pk, cycle_pk)
+        if result.get('status', None) != 'error':
+            property_view = result.pop('property_view')
+            result.update(PropertyViewSerializer(property_view).data)
+            # remove PropertyView id from result
+            result.pop('id')
+            result['state'] = PropertyStateSerializer(property_view.state).data
+            result['taxlots'] = self.get_taxlots(property_view.pk)
+            result['history'], current = self.get_history(property_view)
+            result = update_result_with_current(result, current)
+            status_code = status.HTTP_200_OK
+        else:
+            status_code = status.HTTP_404_NOT_FOUND
+        return Response(result, status=status_code)
+
+    def put(self, request, property_pk, cycle_pk):
+        """View called by update."""
+        data = request.data
+        result = self.get_property_view(property_pk, cycle_pk)
+        if result.get('status', None) != 'error':
+            property_view = result.pop('property_view')
+            property_state_data = PropertyStateSerializer(property_view.state).data
+            new_property_state_data = data['state']
+
+            changed = True
+            if new_property_state_data == property_state_data:
+                changed = False
+            for key, val in new_property_state_data.iteritems():
+                if val == '':
+                    new_property_state_data[key] = None
+            changed_fields = get_changed_fields(
+                property_state_data, new_property_state_data
+            )
+            if not changed_fields:
+                changed = False
+            if not changed:
+                result.update(
+                    {'status': 'error', 'message': 'Nothing to update'}
+                )
+                status_code = 422  # status.HTTP_422_UNPROCESSABLE_ENTITY
+            else:
+                property_state_data.update(new_property_state_data)
+                property_state_data.pop('id')
+
+                new_property_state_serializer = PropertyStateSerializer(
+                    data=property_state_data
+                )
+
+                if new_property_state_serializer.is_valid():
+                    new_state = new_property_state_serializer.save()
+                    property_view.update_state(
+                        self, new_state, description=changed_fields
+                    )
+                    result.update(
+                        {'state': new_property_state_serializer.validated_data}
+                    )
+                    status_code = status.HTTP_201_CREATED
+                else:
+                    result.update(
+                        {'status': 'error', 'message': 'Invalid Data'}
+                    )
+                    status_code = 422  # status.HTTP_422_UNPROCESSABLE_ENTITY
+        else:
+            status_code = status.HTTP_404_NOT_FOUND
+        return Response(result, status=status_code)
+
+
+class TaxLot(DecoratorMixin(drf_api_endpoint), ViewSet):
+    renderer_classes = (JSONRenderer,)
+    parser_classes = (JSONParser,)
+
+    def get_taxlot_view(self, taxlot_pk, cycle_pk):
+        try:
+            taxlot_view = TaxLotView.objects.select_related(
+                'taxlot', 'cycle', 'state'
+            ).get(
+                taxlot_id=taxlot_pk,
+                cycle=cycle_pk,
+                taxlot__organization_id=self.request.GET['organization_id']
+            )
+            result = {
+                'status': 'success',
+                'taxlot_view': taxlot_view
+            }
+        except TaxLotView.DoesNotExist:
+            result = {
+                'status': 'error',
+                'message': 'taxlot view with id {} does not exist'.format(
+                    taxlot_pk)
+            }
+        except TaxLotView.MultipleObjectsReturned:
+            result = {
+                'status': 'error',
+                'message': 'Multiple taxlot views with id {}'.format(
+                    taxlot_pk)
+            }
+        return result
+
+    def get_history(self, taxlot_view):
+        """Return history in reverse order."""
+        history = []
+        current = None
+        audit_logs = TaxLotAuditLog.objects.select_related('state').filter(
+            view=taxlot_view
+        ).order_by('-created', '-state_id')
+        for log in audit_logs:
+            changed_fields = json.loads(log.description)\
+                if log.record_type == AUDIT_USER_EDIT else None
+            record = {
+                'state': TaxLotStateSerializer(log.state),
+                'date_edited': log.created.ctime(),
+                'source': log.get_record_type_display(),
+                'filename': log.import_filename,
+                'changed_fields': changed_fields
+            }
+            if log.state_id == taxlot_view.state_id:
+                current = record
+            else:
+                history.append(record)
+        return history, current
+
+    def get_properties(self, taxlot_view_pk, cycle_pk):
+        property_view_pks = TaxLotProperty.objects.filter(
+            taxlot_view_id=taxlot_view_pk
+        ).values_list('property_view_id', flat=True)
+        property_views = PropertyView.objects.filter(
+            pk__in=property_view_pks
+        ).select_related('cycle', 'state')
+        properties = []
+        for property_view in property_views:
+            properties.append(PropertyViewSerializer(property_view).data)
+        return properties
+
+    def get_taxlot(self, request, taxlot_pk):
+        result = self.get_taxlot_view(taxlot_pk)
+        if result.get('status', None) != 'error':
+            taxlot_view = result.pop('taxlot_view')
+            result.update(TaxLotViewSerializer(taxlot_view).data)
+            # remove TaxLotView id from result
+            result.pop('id')
+            result['state'] = TaxLotStateSerializer(taxlot_view.state).data
+            result['properties'] = self.get_taxlots(taxlot_view.pk)
+            result['history'], current = self.get_history(taxlot_view)
+            result = update_result_with_current(result, current)
+            status_code = status.HTTP_200_OK
+        else:
+            status_code = status.HTTP_404_NOT_FOUND
+        return Response(result, status=status_code)
+
+    def put(self, request, taxlot_pk, cycle_pk):
+        data = request.data
+        result = self.get_taxlot_view(taxlot_pk, cycle_pk)
+        if result.get('status', None) != 'error':
+            taxlot_view = result.pop('taxlot_view')
+            taxlot_state_data = TaxLotStateSerializer(taxlot_view.state).data
+            new_taxlot_state_data = data['state']
+
+            changed = True
+            if new_taxlot_state_data == taxlot_state_data:
+                changed = False
+            for key, val in new_taxlot_state_data.iteritems():
+                if val == '':
+                    new_taxlot_state_data[key] = None
+            changed_fields = get_changed_fields(
+                taxlot_state_data, new_taxlot_state_data
+            )
+            if not changed_fields:
+                changed = False
+            if not changed:
+                result.update(
+                    {'status': 'error', 'message': 'Nothing to update'}
+                )
+                status_code = 422  # status.HTTP_422_UNPROCESSABLE_ENTITY
+            else:
+                taxlot_state_data.update(new_taxlot_state_data)
+                taxlot_state_data.pop('id')
+
+                new_taxlot_state_serializer = TaxLotStateSerializer(
+                    data=taxlot_state_data
+                )
+
+                if new_taxlot_state_serializer.is_valid():
+                    new_state = new_taxlot_state_serializer.save()
+                    taxlot_view.update_state(
+                        self, new_state, description=changed_fields
+                    )
+                    result.update(
+                        {'state': new_taxlot_state_serializer.validated_data}
+                    )
+                    status_code = status.HTTP_201_CREATED
+                else:
+                    result.update(
+                        {'status': 'error', 'message': 'Invalid Data'}
+                    )
+                    status_code = 422  # status.HTTP_422_UNPROCESSABLE_ENTITY
+        else:
+            status_code = status.HTTP_404_NOT_FOUND
+        return Response(result, status=status_code)
+
+
+def get_changed_fields(old, new):
+    """Return changed fields as json string"""
+    changed_fields, changed_extra_data = diffupdate(old, new)
+    if 'id' in changed_fields:
+        changed_fields.remove('id')
+    if 'pk' in changed_fields:
+        changed_fields.remove('pk')
+    if not (changed_fields or changed_extra_data):
+        return None
+    else:
+        return json.dumps({
+            'regular_fields': changed_fields,
+            'extra_data_fields': changed_extra_data
+        })
+
+
+def diffupdate(old, new):
+    """Returns lists of fields changed"""
+    changed_fields = []
+    changed_extra_data = []
+    for k, v in new.iteritems():
+        if old.get(k, None) != v or k not in old:
+            changed_fields.append(k)
+    if 'extra_data' in changed_fields:
+        changed_fields.remove('extra_data')
+        changed_extra_data, _ = diffupdate(old['extra_data'], new['extra_data'])
+    return changed_fields, changed_extra_data
+
+
+def update_result_with_current(result, cur):
+    result['changed_fields'] = cur.get('changed_fields', None) if cur else None
+    result['date_edited'] = cur.get('date_edited', None) if cur else None
+    result['source'] = cur.get('source', None) if cur else None
+    result['filename'] = cur.get('filename', None) if cur else None
+    return result
