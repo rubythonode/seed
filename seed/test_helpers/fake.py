@@ -17,13 +17,18 @@ method mutiple times will always return the same sequence of results
 """
 from collections import namedtuple
 import datetime
+import os
 import re
 import string
 
 from faker import Factory
+import mock
 
-from seed.models import Cycle, Column, Property, PropertyState, TaxLotState
+from django.db.models.fields.files import FieldFile
 
+from seed.models import (
+    BuildingSnapshot, Cycle, Column, Property, PropertyState, TaxLotState
+)
 
 Owner = namedtuple(
     'Owner',
@@ -88,6 +93,50 @@ class BaseFake(object):
         )
 
 
+class FakeBuildingSnapshotFactory(BaseFake):
+    """
+    Factory Class for producing Building Snaphots.
+    """
+
+    def __init__(self, super_organization=None, num_owners=5):
+        super(FakeBuildingSnapshotFactory, self).__init__()
+        self.super_organization = super_organization
+        # pre-generate a list of owners so they occur more than once.
+        self.owners = [self.owner() for i in range(num_owners)]
+
+    def building_details(self):
+        """Return a dict of pseudo random data for use with Building Snapshot"""
+        owner = self.fake.random_element(elements=self.owners)
+        return {
+            'tax_lot_id': self.fake.numerify(text='#####'),
+            'address_line_1': self.address_line_1(),
+            'city': 'Boring',
+            'state_province': 'Oregon',
+            'postal_code': "970{}".format(self.fake.numerify(text='##')),
+            'year_built': self.fake.random_int(min=1880, max=2015),
+            'site_eui': self.fake.random_int(min=50, max=600),
+            'owner': owner.name,
+            'owner_email': owner.email,
+            'owner_telephone': owner.telephone,
+            'owner_address': owner.address,
+            'owner_city_state': owner.city_state,
+            'owner_postal_code': owner.postal_code,
+        }
+
+    def building_snapshot(self, import_file, canonical_building,
+                          super_organization=None, **kw):
+        """Return a building snapshot populated with pseudo random data"""
+        building_details = {
+            'super_organization': self._get_attr('super_organization',
+                                                 super_organization),
+            'import_file': import_file,
+            'canonical_building': canonical_building,
+        }
+        building_details.update(self.building_details())
+        building_details.update(kw)
+        return BuildingSnapshot.objects.create(**building_details)
+
+
 class FakeColumnFactory(BaseFake):
     """
     Factory Class for producing Column instances.
@@ -133,9 +182,15 @@ class FakeCycleFactory(BaseFake):
         self.user = user
 
     def get_cycle(self, organization=None, user=None, **kw):
-        start = self.fake.date_time_this_decade()
-        start = datetime.datetime(start.year, 01, 01)
-        end = start + datetime.timedelta(365)
+        if 'start' in kw:
+            start = kw.pop('start')
+        else:
+            start = self.fake.date_time_this_decade()
+            start = datetime.datetime(start.year, 01, 01)
+        if 'end' in kw:
+            end = kw.pop('end')
+        else:
+            end = start + datetime.timedelta(365)
         cycle_details = {
             'organization': getattr(self, 'organization', None),
             'user': getattr(self, 'user', None),
@@ -227,3 +282,44 @@ class FakeTaxLotStateFactory(BaseFake):
         taxlot_details = self.get_details()
         taxlot_details.update(kw)
         return TaxLotState.objects.create(**taxlot_details)
+
+
+def mock_file_factory(name, size=None, url=None, path=None):
+    """
+    This creates a mock instance of a FieldFile from
+    django.db.models.fields.files.
+    This is used to represent a file stored in Django and is linked file storage
+    so it handles uploading and saving to disk.
+    The mock allow you to set the file name etc without having to save a file to disk.
+    """
+    mock_file = mock.MagicMock(spec=FieldFile)
+    mock_file._committed = True
+    mock_file.file_name = name
+    mock_file.name = name
+    mock_file.base_name = os.path.splitext(name)[0]
+    mock_file.__unicode__.return_value = name
+
+    def __eq__(other):
+        if hasattr(other, 'name'):
+            return name == other.name
+        else:
+            return name == other
+    mock_file.__eq__.side_effect = __eq__
+
+    def __ne__(other):
+        return not __eq__(other)
+
+    mock_file.__ne__.side_effect = __ne__
+    mock_file._get_size.return_value = size
+    mock_size = mock.PropertyMock(return_value=size)
+    type(mock_file).size = mock_size
+    mock_file._get_path.return_value = path
+    mock_path = mock.PropertyMock(return_value=path)
+    type(mock_file).path = mock_path
+    mock_file._get_url.return_value = url
+    mock_url = mock.PropertyMock(return_value=url)
+    type(mock_file).url = mock_url
+    mock_file._get_closed.return_value = True
+    mock_closed = mock.PropertyMock(return_value=True)
+    type(mock_file).closed = mock_closed
+    return mock_file
