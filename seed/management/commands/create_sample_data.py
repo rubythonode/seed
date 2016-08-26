@@ -464,7 +464,7 @@ def create_case_C(org, cycle, taxlot_factory, property_factory, number_taxlots=3
     return taxlots, properties
 
 
-def _create_case_D(org, cycle, taxlots, properties, campus):
+def _create_case_D(org, cycle, taxlots, properties, campus, number_records_per_cycle_per_state=1):
     """
     Creates one instance of Case D (n buildings, m taxlots, one campus) for the given org in the given cycle
     :param org: Organization, the organization that will own the created cases
@@ -482,13 +482,7 @@ def _create_case_D(org, cycle, taxlots, properties, campus):
             state.extra_data[k] = extra_data[k]
         state.save()
         return state
-
-    campus_property = seed.models.Property.objects.create(organization=org, campus=True)
-    property_objs = [seed.models.Property.objects.create(organization=org, parent_property=campus_property) for p in properties]
-
-    property_objs.insert(0, campus_property)
-    taxlot_objs = [seed.models.TaxLot.objects.create(organization=org) for t in taxlots]
-
+    
     def _create_states_with_extra_data(model, records):
         states = []
         for rec in records:
@@ -496,26 +490,41 @@ def _create_case_D(org, cycle, taxlots, properties, campus):
             state = add_extra_data(state, rec.extra_data)
             states.append(state)
         return states
+    
+    for i in range(number_records_per_cycle_per_state):
+        taxlots = map(update_taxlot_noise, taxlots)
+        properties = map(update_property_noise, properties)
+        campus = update_property_noise(campus)
 
-    property_states = _create_states_with_extra_data(seed.models.PropertyState, [campus] + properties)
-    property_views = [seed.models.PropertyView.objects.get_or_create(property=property, cycle=cycle, state=prop_state)[0] for (property, prop_state) in zip(property_objs, property_states)]
+        campus_property = seed.models.Property.objects.create(organization=org, campus=True)
+        property_objs = [seed.models.Property.objects.create(organization=org, parent_property=campus_property) for p in properties]
+    
+        property_objs.insert(0, campus_property)
+        taxlot_objs = [seed.models.TaxLot.objects.create(organization=org) for t in taxlots]
+    
+    
+    
+        property_states = _create_states_with_extra_data(seed.models.PropertyState, [campus] + properties)
+        property_views = [seed.models.PropertyView.objects.get_or_create(property=property, cycle=cycle, state=prop_state)[0] for (property, prop_state) in zip(property_objs, property_states)]
+    
+        taxlot_states = _create_states_with_extra_data(seed.models.TaxLotState, taxlots)
+        taxlot_views = [seed.models.TaxLotView.objects.get_or_create(taxlot=taxlot, cycle=cycle, state=taxlot_state)[0] for (taxlot, taxlot_state) in zip(taxlot_objs, taxlot_states)]
+    
+        seed.models.TaxLotProperty.objects.get_or_create(property_view=property_views[0], taxlot_view=taxlot_views[0], cycle=cycle)
+        seed.models.TaxLotProperty.objects.get_or_create(property_view=property_views[1], taxlot_view=taxlot_views[0], cycle=cycle)
+        seed.models.TaxLotProperty.objects.get_or_create(property_view=property_views[2], taxlot_view=taxlot_views[0], cycle=cycle)
+        seed.models.TaxLotProperty.objects.get_or_create(property_view=property_views[3], taxlot_view=taxlot_views[0], cycle=cycle)
+    
+        seed.models.TaxLotProperty.objects.get_or_create(property_view=property_views[4], taxlot_view=taxlot_views[1], cycle=cycle)
+        seed.models.TaxLotProperty.objects.get_or_create(property_view=property_views[4], taxlot_view=taxlot_views[2], cycle=cycle)
+    
+        seed.models.TaxLotProperty.objects.get_or_create(property_view=property_views[5], taxlot_view=taxlot_views[1], cycle=cycle)
+        seed.models.TaxLotProperty.objects.get_or_create(property_view=property_views[5], taxlot_view=taxlot_views[2], cycle=cycle)
+    
+    return taxlots, properties, campus
 
-    taxlot_states = _create_states_with_extra_data(seed.models.TaxLotState, taxlots)
-    taxlot_views = [seed.models.TaxLotView.objects.get_or_create(taxlot=taxlot, cycle=cycle, state=taxlot_state)[0] for (taxlot, taxlot_state) in zip(taxlot_objs, taxlot_states)]
 
-    seed.models.TaxLotProperty.objects.get_or_create(property_view=property_views[0], taxlot_view=taxlot_views[0], cycle=cycle)
-    seed.models.TaxLotProperty.objects.get_or_create(property_view=property_views[1], taxlot_view=taxlot_views[0], cycle=cycle)
-    seed.models.TaxLotProperty.objects.get_or_create(property_view=property_views[2], taxlot_view=taxlot_views[0], cycle=cycle)
-    seed.models.TaxLotProperty.objects.get_or_create(property_view=property_views[3], taxlot_view=taxlot_views[0], cycle=cycle)
-
-    seed.models.TaxLotProperty.objects.get_or_create(property_view=property_views[4], taxlot_view=taxlot_views[1], cycle=cycle)
-    seed.models.TaxLotProperty.objects.get_or_create(property_view=property_views[4], taxlot_view=taxlot_views[2], cycle=cycle)
-
-    seed.models.TaxLotProperty.objects.get_or_create(property_view=property_views[5], taxlot_view=taxlot_views[1], cycle=cycle)
-    seed.models.TaxLotProperty.objects.get_or_create(property_view=property_views[5], taxlot_view=taxlot_views[2], cycle=cycle)
-
-
-def create_case_D(org, cycle, taxlot_factory, property_factory):
+def create_case_D(org, cycle, taxlot_factory, property_factory, number_records_per_cycle_per_state=1):
     """
     Creates one instance of Case D (n buildings, m taxlots, one campus) for the given org in the given cycle
     :param org: Organization, the organization that will own the created cases
@@ -539,7 +548,7 @@ def create_case_D(org, cycle, taxlot_factory, property_factory):
     for i in range(5):
         properties.append(property_factory.property_state(pm_parent_property_id=campus_property_id, city=city))
 
-    _create_case_D(org, cycle, taxlots, properties, campus)
+    taxlots, properties, campus = _create_case_D(org, cycle, taxlots, properties, campus, number_records_per_cycle_per_state)
 
     return taxlots, properties, campus
 
@@ -629,7 +638,7 @@ def create_additional_years(org, years, pairs_taxlots_and_properties, case, numb
             taxlots, properties = create_cases_with_multi_records_per_cycle(org, cycle, taxlots, properties, number_records_per_cycle_per_state)
 
 
-def create_additional_years_D(org, years, tuples_taxlots_properties_campus):
+def create_additional_years_D(org, years, tuples_taxlots_properties_campus, number_records_per_cycle_per_state=1):
     """
     Creates additional years of records from existing SampleDataRecords for case D.
     :param org: Organization, the org that will own the new records
@@ -647,13 +656,14 @@ def create_additional_years_D(org, years, tuples_taxlots_properties_campus):
 
         update_taxlot_f = lambda x: update_taxlot_year(x, year)
         update_property_f = lambda x: update_property_year(x, year)
-
-        for idx, [taxlots, properties, campus] in enumerate(tuples_taxlots_properties_campus):
-            taxlots = map(update_taxlot_f, taxlots)
-            properties = map(update_property_f, properties)
-            campus = update_property_f(campus)
-            print "Creating {i}".format(i=idx)
-            _create_case_D(org, cycle, taxlots, properties, campus)
+        
+        for i in range(number_records_per_cycle_per_state):
+            for idx, [taxlots, properties, campus] in enumerate(tuples_taxlots_properties_campus):
+                taxlots = map(update_taxlot_f, taxlots)
+                properties = map(update_property_f, properties)
+                campus = update_property_f(campus)
+                print "Creating {i}".format(i=idx)
+                _create_case_D(org, cycle, taxlots, properties, campus)
 
 
 def create_sample_data(years, a_ct=0, b_ct=0, c_ct=0, d_ct=0, number_records_per_cycle_per_state=1):
@@ -704,9 +714,9 @@ def create_sample_data(years, a_ct=0, b_ct=0, c_ct=0, d_ct=0, number_records_per
     for i in range(d_ct):
         print "Creating Case D {i}".format(i=i)
         property_factory.case_description = "Case D: Campus with Multiple associated buildings"
-        tuples_taxlots_properties_campus_D.append(create_case_D(org, cycle, taxlot_factory, property_factory))
+        tuples_taxlots_properties_campus_D.append(create_case_D(org, cycle, taxlot_factory, property_factory, number_records_per_cycle_per_state))
 
-    create_additional_years_D(org, extra_years, tuples_taxlots_properties_campus_D)
+    create_additional_years_D(org, extra_years, tuples_taxlots_properties_campus_D, number_records_per_cycle_per_state)
 
 
 class Command(BaseCommand):
