@@ -80,6 +80,8 @@ class Command(BaseCommand):
         if not destroy and not migrate and not campus and not m2m and not primarysecondary and not migrate_columns and not migrate_labels:
             destroy, migrate, campus, m2m, primarysecondary, migrate_columns, migrate_labels = [True] * 7
 
+        options['clear_bluesky_labels'] = False
+
         if destroy:
             ddc = DestroyDataCommand()
             ddc.handle(*args, **options)
