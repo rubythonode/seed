@@ -590,8 +590,7 @@ def create_associated_bluesky_taxlots_properties(org, import_buildingsnapshots, 
                 taxlotview.update_state(tax_lot_state, name="Merge current state in migration")
                 taxlotview.save()
             else:
-                taxlotview, created = seed.models.TaxLotView.objects.get_or_create(taxlot=tax_lot, cycle=import_cycle, state=tax_lot_state)
-                taxlotview.ensure_audit_logs_initialized()
+                taxlotview, created = seed.models.TaxLotView.objects.get_or_create(taxlot=tax_lot, cycle=import_cycle, state=tax_lot_state)                
                 tax_lot_view_created += int(created)
                 assert created, "Should have created a tax lot."
                 taxlotview.save()
@@ -609,8 +608,7 @@ def create_associated_bluesky_taxlots_properties(org, import_buildingsnapshots, 
                 propertyview.update_state(property_state, name="Merge current state in migration")
                 propertyview.save()
             else:
-                propertyview, created = seed.models.PropertyView.objects.get_or_create(property=property_obj, cycle=import_cycle, state=property_state)
-                propertyview.ensure_audit_logs_initialized()
+                propertyview, created = seed.models.PropertyView.objects.get_or_create(property=property_obj, cycle=import_cycle, state=property_state)                
                 assert created, "Should have created something"
                 property_view_created += int(created)
                 propertyview.save()
