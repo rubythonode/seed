@@ -5,7 +5,7 @@ from seed.lib.superperms.orgs.models import Organization
 import datetime
 import logging
 import itertools
-from random import randint
+from random import randint, random
 import seed.models
 
 from seed.test_helpers.fake import FakePropertyStateFactory, FakeTaxLotStateFactory, BaseFake
@@ -287,9 +287,6 @@ def update_taxlot_noise(taxlot):
     :param taxlot: SampleDataRecord with taxlot data.
     :return: The same taxlot with the confidence updated to a random number
     """
-    
-    from random import random
-    
     # FIXME  This is a hack to get the multi-year data working.
     # The issue is that nothing is changing in the non-extra_data fields
     # in the TaxLotState between years so when the code creates the second
@@ -313,6 +310,10 @@ def create_cases(org, cycle, tax_lots, properties):
     :param taxlots : list of taxlot data in dict form.
     :param properties: list of taxlot data in dict form
     """
+    
+    created_property_views = []
+    created_taxlot_views = []
+    
     for (tl_rec, prop_rec) in itertools.product(tax_lots, properties):
         tl_def = tl_rec.data
         prop_def = prop_rec.data
@@ -376,11 +377,44 @@ def create_cases(org, cycle, tax_lots, properties):
             taxlot = seed.models.TaxLotView.objects.filter(state=taxlot_state).filter(taxlot__organization=org)[0].taxlot
 
         taxlot_view, created = seed.models.TaxLotView.objects.get_or_create(taxlot=taxlot, cycle=cycle, state=taxlot_state)
+        if created:
+            created_taxlot_views.append(taxlot_view)
+        
         prop_view, created = seed.models.PropertyView.objects.get_or_create(property=property, cycle=cycle, state=prop_state)
+        if created:
+            created_property_views.append(prop_view)
 
         tlp, created = seed.models.TaxLotProperty.objects.get_or_create(property_view=prop_view, taxlot_view=taxlot_view, cycle=cycle)
 
-    return
+    return created_taxlot_views, created_property_views
+
+def update_taxlot_views(views, number_of_updates):
+    """
+    Changes some data in the underlying state and then updates the view to create an audit log
+    
+    :param viws: list of TaxLotViews to be updated
+    :param number_of_updates: int, number of times to update (the number of audit records to be created) 
+    """
+    for i in range(number_of_updates):
+        for taxlot_view in views:
+            state = taxlot_view.state
+            state.confidence = random()
+            state.save()
+            taxlot_view.update_state(state)
+            
+def update_property_views(views, number_of_updates):
+    """
+    Changes some data in the underlying state and then updates the view to create an audit log
+    
+    :param viws: list of PropertyViews to be updated
+    :param number_of_updates: int, number of times to update (the number of audit records to be created) 
+    """
+    for i in range(number_of_updates):                
+        for property_view in views:
+            state = property_view.state
+            state.site_eui = unicode(float(randint(0, 1000)) + float(randint(0, 9)) / 10)
+            state.save()
+            property_view.update_state(state)
 
 def create_cases_with_multi_records_per_cycle(org, cycle, taxlots, properties, number_records=1):
     """
@@ -396,10 +430,9 @@ def create_cases_with_multi_records_per_cycle(org, cycle, taxlots, properties, n
     :param number_records: number of times to loop through creating the cases
     """
     
-    for i in range(number_records):
-        create_cases(org, cycle, taxlots, properties)
-        taxlots = map(update_taxlot_noise, taxlots)
-        properties = map(update_property_noise, properties)
+    taxlot_views, property_views = create_cases(org, cycle, taxlots, properties)
+    update_taxlot_views(taxlot_views, number_records)
+    update_property_views(property_views, number_records)
         
     return taxlots, properties
 
@@ -412,7 +445,7 @@ def create_case_A(org, cycle, taxlot_factory, property_factory, number_records_p
     :param cycle: Cycle, the cycle the created records will be associated with
     :param taxlot_factory: CreateSampleDataFakeTaxLotFactory, used to generate the randomized taxlot data
     :param property_factory: CreateSampleDataFakePropertyFactory, used to generate the randomized property data
-    :param number_records_per_cycle: int, number of records for each created propertystate and taxlot
+    :param number_records_per_cycle: int, number of records to create each cycle for each created propertystate and taxlot
     :return: two lists of SampleDataRecords.  First is a list of taxlots and second is a list of properties
     """
     taxlot = taxlot_factory.tax_lot()
@@ -491,35 +524,39 @@ def _create_case_D(org, cycle, taxlots, properties, campus, number_records_per_c
             states.append(state)
         return states
     
-    for i in range(number_records_per_cycle_per_state):
-        taxlots = map(update_taxlot_noise, taxlots)
-        properties = map(update_property_noise, properties)
-        campus = update_property_noise(campus)
+    
+    taxlots = map(update_taxlot_noise, taxlots)
+    properties = map(update_property_noise, properties)
+    campus = update_property_noise(campus)
 
-        campus_property = seed.models.Property.objects.create(organization=org, campus=True)
-        property_objs = [seed.models.Property.objects.create(organization=org, parent_property=campus_property) for p in properties]
+    campus_property = seed.models.Property.objects.create(organization=org, campus=True)
+    property_objs = [seed.models.Property.objects.create(organization=org, parent_property=campus_property) for p in properties]
+
+    property_objs.insert(0, campus_property)
+    taxlot_objs = [seed.models.TaxLot.objects.create(organization=org) for t in taxlots]
+
+
+
+    property_states = _create_states_with_extra_data(seed.models.PropertyState, [campus] + properties)
+    property_views = [seed.models.PropertyView.objects.get_or_create(property=property, cycle=cycle, state=prop_state)[0] for (property, prop_state) in zip(property_objs, property_states)]
+
+    taxlot_states = _create_states_with_extra_data(seed.models.TaxLotState, taxlots)
+    taxlot_views = [seed.models.TaxLotView.objects.get_or_create(taxlot=taxlot, cycle=cycle, state=taxlot_state)[0] for (taxlot, taxlot_state) in zip(taxlot_objs, taxlot_states)]
+
+    seed.models.TaxLotProperty.objects.get_or_create(property_view=property_views[0], taxlot_view=taxlot_views[0], cycle=cycle)
+    seed.models.TaxLotProperty.objects.get_or_create(property_view=property_views[1], taxlot_view=taxlot_views[0], cycle=cycle)
+    seed.models.TaxLotProperty.objects.get_or_create(property_view=property_views[2], taxlot_view=taxlot_views[0], cycle=cycle)
+    seed.models.TaxLotProperty.objects.get_or_create(property_view=property_views[3], taxlot_view=taxlot_views[0], cycle=cycle)
+
+    seed.models.TaxLotProperty.objects.get_or_create(property_view=property_views[4], taxlot_view=taxlot_views[1], cycle=cycle)
+    seed.models.TaxLotProperty.objects.get_or_create(property_view=property_views[4], taxlot_view=taxlot_views[2], cycle=cycle)
+
+    seed.models.TaxLotProperty.objects.get_or_create(property_view=property_views[5], taxlot_view=taxlot_views[1], cycle=cycle)
+    seed.models.TaxLotProperty.objects.get_or_create(property_view=property_views[5], taxlot_view=taxlot_views[2], cycle=cycle)
     
-        property_objs.insert(0, campus_property)
-        taxlot_objs = [seed.models.TaxLot.objects.create(organization=org) for t in taxlots]
-    
-    
-    
-        property_states = _create_states_with_extra_data(seed.models.PropertyState, [campus] + properties)
-        property_views = [seed.models.PropertyView.objects.get_or_create(property=property, cycle=cycle, state=prop_state)[0] for (property, prop_state) in zip(property_objs, property_states)]
-    
-        taxlot_states = _create_states_with_extra_data(seed.models.TaxLotState, taxlots)
-        taxlot_views = [seed.models.TaxLotView.objects.get_or_create(taxlot=taxlot, cycle=cycle, state=taxlot_state)[0] for (taxlot, taxlot_state) in zip(taxlot_objs, taxlot_states)]
-    
-        seed.models.TaxLotProperty.objects.get_or_create(property_view=property_views[0], taxlot_view=taxlot_views[0], cycle=cycle)
-        seed.models.TaxLotProperty.objects.get_or_create(property_view=property_views[1], taxlot_view=taxlot_views[0], cycle=cycle)
-        seed.models.TaxLotProperty.objects.get_or_create(property_view=property_views[2], taxlot_view=taxlot_views[0], cycle=cycle)
-        seed.models.TaxLotProperty.objects.get_or_create(property_view=property_views[3], taxlot_view=taxlot_views[0], cycle=cycle)
-    
-        seed.models.TaxLotProperty.objects.get_or_create(property_view=property_views[4], taxlot_view=taxlot_views[1], cycle=cycle)
-        seed.models.TaxLotProperty.objects.get_or_create(property_view=property_views[4], taxlot_view=taxlot_views[2], cycle=cycle)
-    
-        seed.models.TaxLotProperty.objects.get_or_create(property_view=property_views[5], taxlot_view=taxlot_views[1], cycle=cycle)
-        seed.models.TaxLotProperty.objects.get_or_create(property_view=property_views[5], taxlot_view=taxlot_views[2], cycle=cycle)
+    #create audit log information
+    update_taxlot_views(taxlot_views, number_records_per_cycle_per_state)
+    update_property_views(property_views, number_records_per_cycle_per_state)
     
     return taxlots, properties, campus
 
@@ -581,9 +618,7 @@ def update_property_noise(property):
     that changes with every new property regradless of anything else
     :param property: SampleDataRecord with property data.
     :return: The same property with the site_eui updated to a random number
-    """
-    
-    from random import randint
+    """    
     # randomize "site_eui" 
     property.data["site_eui"] = unicode(float(randint(0, 1000)) + float(randint(0, 9)) / 10)
     return property
